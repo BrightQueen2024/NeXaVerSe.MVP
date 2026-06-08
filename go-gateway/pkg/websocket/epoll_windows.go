@@ -1,0 +1,59 @@
+//go:build !linux
+
+package websocket
+
+import (
+	"net"
+	"sync"
+)
+
+// Epoll is a mock/fallback event poller for non-Linux OS (development/testing)
+type Epoll struct {
+	connections map[net.Conn]bool
+	lock        *sync.RWMutex
+	trigger     chan net.Conn
+}
+
+func NewEpoll() (*Epoll, error) {
+	return &Epoll{
+		connections: make(map[net.Conn]bool),
+		lock:        &sync.RWMutex{},
+		trigger:     make(chan net.Conn, 1000),
+	}, nil
+}
+
+func (e *Epoll) Add(conn net.Conn) error {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	e.connections[conn] = true
+	// Start a monitoring goroutine to simulate read-readiness trigger
+	go func() {
+		buf := make([]byte, 1)
+		// Peek or read block to trigger
+		_, err := conn.Read(buf)
+		if err != nil {
+			e.trigger <- conn
+			return
+		}
+		// Put connection back in read queue
+		e.trigger <- conn
+	}()
+	return nil
+}
+
+func (e *Epoll) Remove(conn net.Conn) error {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	delete(e.connections, conn)
+	return nil
+}
+
+func (e *Epoll) Wait() ([]net.Conn, error) {
+	conn := <-e.trigger
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+	if e.connections[conn] {
+		return []net.Conn{conn}, nil
+	}
+	return nil, nil
+}

@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # DATABASES & CACHING LAYER
+  # ==========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: nexaverse-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: nexaverse
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexaverse-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # STORAGE LAYER (S3 EMULATION VIA MINIO)
+  # ==========================================
+  minio:
+    image: minio/minio:RELEASE.2023-01-02T09-40-09Z
+    container_name: nexaverse-minio
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Admin UI Console
+    environment:
+      MINIO_ROOT_USER: mock-key
+      MINIO_ROOT_PASSWORD: mock-secret
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Automatically provision the required 'nexa-media' bucket in MinIO
+  minio-provisioner:
+    image: minio/mc:RELEASE.2023-01-02T19-48-22Z
+    container_name: nexaverse-minio-provisioner
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set localminio http://minio:9000 mock-key mock-secret;
+      /usr/bin/mc mb --ignore-existing localminio/nexa-media;
+      /usr/bin/mc anonymous set public localminio/nexa-media;
+      exit 0;
+      "
+
+  # ==========================================
+  # MICROSERVICES
+  # ==========================================
+  go-gateway:
+    build:
+      context: ./go-gateway
+      dockerfile: Dockerfile
+    container_name: nexaverse-go-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_ADDR: "redis:6379"
+      PORT: "8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  rust-ledger:
+    build:
+      context: ./rust-ledger
+      dockerfile: Dockerfile
+    container_name: nexaverse-rust-ledger
+    ports:
+      - "8081:8081"
+    environment:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/nexaverse"
+      PORT: "8081"
+      L2_RPC_URL: "https://arbitrum-sepolia.infura.io/v3/mock-project-id"
+      NEXACOIN_CONTRACT: "0xFE73C654637D06606aC2263C70D06aC2263C70D0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nestjs-media:
+    build:
+      context: ./nestjs-media
+      dockerfile: Dockerfile
+    container_name: nexaverse-nestjs-media
+    ports:
+      - "8082:8082"
+    environment:
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      PORT: "8082"
+      AWS_ACCESS_KEY_ID: "mock-key"
+      AWS_SECRET_ACCESS_KEY: "mock-secret"
+      S3_ENDPOINT: "http://minio:9000"
+      S3_BUCKET_NAME: "nexa-media"
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

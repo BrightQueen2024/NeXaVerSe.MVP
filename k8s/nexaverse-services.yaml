@@ -1,0 +1,207 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexaverse
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexaverse-config
+  namespace: nexaverse
+data:
+  REDIS_ADDR: "redis-cluster.nexaverse.svc.cluster.local:6379"
+  REDIS_HOST: "redis-cluster.nexaverse.svc.cluster.local"
+  REDIS_PORT: "6379"
+  DATABASE_URL: "postgres://postgres-ha.nexaverse.svc.cluster.local:5432/nexaverse"
+  L2_RPC_URL: "https://arbitrum-sepolia.infura.io/v3/mock-project-id"
+  NEXACOIN_CONTRACT: "0xFE73C654637D06606aC2263C70D06aC2263C70D0"
+  S3_ENDPOINT: "http://minio.nexaverse.svc.cluster.local:9000"
+  S3_BUCKET_NAME: "nexa-media"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nexaverse-secrets
+  namespace: nexaverse
+type: Opaque
+data:
+  # Base64 encoded placeholders for development setup
+  AWS_ACCESS_KEY_ID: bW9jay1rZXk= # mock-key
+  AWS_SECRET_ACCESS_KEY: bW9jay1zZWNyZXQ= # mock-secret
+---
+# ==========================================
+# 1. GO-GATEWAY: WEBSOCKET GATEWAY DEPLOYMENT
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-gateway
+  namespace: nexaverse
+  labels:
+    app: go-gateway
+spec:
+  replicas: 5 # Scale to maintain 500,000 active concurrent WebSocket connections
+  selector:
+    matchLabels:
+      app: go-gateway
+  template:
+    metadata:
+      labels:
+        app: go-gateway
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: go-gateway
+      containers:
+        - name: go-gateway
+          image: nexaverse/go-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http-ws
+          envFrom:
+            - configMapRef:
+                name: nexaverse-config
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          readinessProbe:
+            httpGet:
+              path: /ws?user_id=health_check&age=20
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ws?user_id=health_check&age=20
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-gateway
+  namespace: nexaverse
+spec:
+  selector:
+    app: go-gateway
+  ports:
+    - name: http-ws
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+---
+# ==========================================
+# 2. RUST-LEDGER: WALLET & ESCROW DEPLOYMENT
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rust-ledger
+  namespace: nexaverse
+  labels:
+    app: rust-ledger
+spec:
+  replicas: 3 # Scaling L2 Transaction processing nodes
+  selector:
+    matchLabels:
+      app: rust-ledger
+  template:
+    metadata:
+      labels:
+        app: rust-ledger
+    spec:
+      containers:
+        - name: rust-ledger
+          image: nexaverse/rust-ledger:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+              name: http-api
+          envFrom:
+            - configMapRef:
+                name: nexaverse-config
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rust-ledger
+  namespace: nexaverse
+spec:
+  selector:
+    app: rust-ledger
+  ports:
+    - name: http-api
+      port: 8081
+      targetPort: 8081
+  type: ClusterIP
+---
+# ==========================================
+# 3. NESTJS-MEDIA: SOCIAL FEED & STREAM ENGINE
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nestjs-media
+  namespace: nexaverse
+  labels:
+    app: nestjs-media
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nestjs-media
+  template:
+    metadata:
+      labels:
+        app: nestjs-media
+    spec:
+      containers:
+        - name: nestjs-media
+          image: nexaverse/nestjs-media:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+              name: http-api
+          envFrom:
+            - configMapRef:
+                name: nexaverse-config
+            - secretRef:
+                name: nexaverse-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nestjs-media
+  namespace: nexaverse
+spec:
+  selector:
+    app: nestjs-media
+  ports:
+    - name: http-api
+      port: 8082
+      targetPort: 8082
+  type: ClusterIP

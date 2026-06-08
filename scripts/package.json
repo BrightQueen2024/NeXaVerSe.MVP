@@ -1,0 +1,12 @@
+{
+  "name": "nexaverse-e2e-tests",
+  "version": "1.0.0",
+  "description": "E2E integration test suite for NeXaVerSe microservices",
+  "main": "e2e-test.js",
+  "scripts": {
+    "test": "node e2e-test.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}
