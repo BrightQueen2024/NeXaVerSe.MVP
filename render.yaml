@@ -18,7 +18,7 @@ services:
   # 2. Rust Wallet Ledger & Atomic Escrow Engine
   # ---------------------------------------------------------------------------
   - type: web
-    name: nexa-rust-ledger
+    name: nexaverse-mvp-ledger
     env: docker
     plan: free
     rootDir: rust-ledger
