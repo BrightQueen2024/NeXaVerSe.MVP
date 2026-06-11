@@ -10,7 +10,7 @@ services:
     dockerfilePath: Dockerfile
     envVars:
       - key: REDIS_URL
-        value: "redis://default:placeholder-password@your-upstash-redis.upstash.io:6379"
+        sync: false
       - key: PORT
         value: "8080"
 
@@ -25,9 +25,9 @@ services:
     dockerfilePath: Dockerfile
     envVars:
       - key: DATABASE_URL
-        value: "postgresql://neondb_owner:placeholder-pass@ep-placeholder-pool.us-east-2.aws.neon.tech/neondb?sslmode=require"
+        sync: false
       - key: RPC_PROVIDER_URL
-        value: "https://eth-sepolia.g.alchemy.com/v2/placeholder-api-key"
+        sync: false
       - key: PORT
         value: "8081"
 
@@ -42,8 +42,8 @@ services:
     dockerfilePath: Dockerfile
     envVars:
       - key: REDIS_URL
-        value: "redis://default:placeholder-password@your-upstash-redis.upstash.io:6379"
+        sync: false
       - key: MONGODB_URI
-        value: "mongodb+srv://nexa-user:placeholder-pass@cluster-nexa.mongodb.net/nexaverse?retryWrites=true&w=majority"
+        sync: false
       - key: PORT
         value: "8082"
