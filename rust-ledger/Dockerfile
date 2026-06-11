@@ -16,6 +16,7 @@ RUN rm -rf src
 
 # Copy real source code
 COPY src ./src
+COPY contracts ./contracts
 
 # Build the real binary
 # Touch main.rs to force cargo to rebuild it

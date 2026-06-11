@@ -10,13 +10,13 @@ use crate::models::TransactionOutbox;
 // Generate type-safe bindings for NeXacoin and NexEscrow contracts
 abigen!(
     NeXacoinContract,
-    "../contracts/artifacts/contracts/NeXacoin.sol/NeXacoin.json",
+    "contracts/NeXacoin.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
 abigen!(
     NexEscrowContract,
-    "../contracts/artifacts/contracts/NexEscrow.sol/NexEscrow.json",
+    "contracts/NexEscrow.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
