@@ -1,7 +1,6 @@
 use actix_web::{web, App, HttpServer, middleware::Logger};
-use sqlx::postgres::{PgPoolOptions, PgConnectOptions};
+use sqlx::postgres::PgPoolOptions;
 use std::env;
-use std::str::FromStr;
 
 mod models;
 mod handlers;
@@ -17,13 +16,9 @@ async fn main() -> std::io::Result<()> {
     });
 
     log::info!("Connecting to PostgreSQL database...");
-    let connection_options = PgConnectOptions::from_str(&db_url)
-        .expect("Failed to parse database connection URL")
-        .statement_cache_capacity(0);
-
     let pool = PgPoolOptions::new()
         .max_connections(50)
-        .connect_with(connection_options)
+        .connect(&db_url)
         .await
         .expect("Failed to connect to database");
 
