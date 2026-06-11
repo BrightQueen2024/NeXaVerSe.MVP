@@ -85,8 +85,24 @@ export class KycService {
   }
 
   private async notifyLedgerOfKycSuccess(userId: string) {
-    // Mock HTTP post callback to rust-ledger/wallet/kyc-webhook
     this.logger.log(`Webhook callback dispatched: notifying rust-ledger of KYC state change for user ${userId}`);
-    // In production, makes an HTTP call to the Rust service to sync compliance status in PostgreSQL
+    const ledgerUrl = process.env.LEDGER_URL || 'http://localhost:8081';
+    try {
+      const response = await fetch(`${ledgerUrl}/wallet/kyc-webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (!response.ok) {
+        this.logger.error(`Failed to notify ledger. HTTP status: ${response.status}`);
+      } else {
+        const result = await response.json();
+        this.logger.log(`Ledger KYC webhook success: ${JSON.stringify(result)}`);
+      }
+    } catch (err) {
+      this.logger.error(`Error notifying ledger webhook: ${err.message}`);
+    }
   }
 }

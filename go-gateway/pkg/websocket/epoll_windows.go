@@ -28,15 +28,22 @@ func (e *Epoll) Add(conn net.Conn) error {
 	e.connections[conn] = true
 	// Start a monitoring goroutine to simulate read-readiness trigger
 	go func() {
-		buf := make([]byte, 1)
-		// Peek or read block to trigger
-		_, err := conn.Read(buf)
-		if err != nil {
+		if pc, ok := conn.(*PeekableConn); ok {
+			_, err := pc.Peek()
+			if err != nil {
+				e.trigger <- conn
+				return
+			}
 			e.trigger <- conn
-			return
+		} else {
+			buf := make([]byte, 1)
+			_, err := conn.Read(buf)
+			if err != nil {
+				e.trigger <- conn
+				return
+			}
+			e.trigger <- conn
 		}
-		// Put connection back in read queue
-		e.trigger <- conn
 	}()
 	return nil
 }

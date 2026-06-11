@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use rust_decimal::Decimal;
 
-use crate::models::{TransferRequest, EscrowCreateRequest, EscrowReleaseRequest};
+use crate::models::{TransferRequest, EscrowCreateRequest, EscrowReleaseRequest, KycWebhookRequest};
 
 // Helper function to check idempotency key
 async fn verify_idempotency(
@@ -303,5 +303,37 @@ pub async fn escrow_release(
         "escrow_id": escrow_id.to_string(),
         "state": "RELEASED",
         "message": "Escrow released off-chain. Queue processing on-chain."
+    }))
+}
+
+pub async fn kyc_webhook(
+    pool: web::Data<PgPool>,
+    body: web::Json<KycWebhookRequest>,
+) -> impl Responder {
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+
+    match sqlx::query("UPDATE wallet_accounts SET kyc_verified = TRUE, updated_at = NOW() WHERE user_id = $1")
+        .bind(&body.user_id)
+        .execute(&mut *tx)
+        .await
+    {
+        Ok(res) => {
+            if res.rows_affected() == 0 {
+                return HttpResponse::NotFound().body("User wallet not found");
+            }
+        }
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    }
+
+    if let Err(e) = tx.commit().await {
+        return HttpResponse::InternalServerError().body(e.to_string());
+    }
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "success",
+        "message": format!("KYC status updated for user {}", body.user_id)
     }))
 }

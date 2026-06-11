@@ -40,6 +40,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .wrap(Logger::default())
             .route("/wallet/transfer", web::post().to(handlers::wallet_transfer))
+            .route("/wallet/kyc-webhook", web::post().to(handlers::kyc_webhook))
             .route("/escrow/create", web::post().to(handlers::escrow_create))
             .route("/escrow/release/{id}", web::post().to(handlers::escrow_release))
     })

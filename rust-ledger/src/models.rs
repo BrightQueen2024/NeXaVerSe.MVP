@@ -60,3 +60,8 @@ pub struct EscrowCreateRequest {
 pub struct EscrowReleaseRequest {
     pub signature: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct KycWebhookRequest {
+    pub user_id: String,
+}

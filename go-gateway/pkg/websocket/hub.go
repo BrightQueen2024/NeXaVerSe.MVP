@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gobwas/ws/wsutil"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -100,21 +101,16 @@ func (h *Hub) handleRead(conn net.Conn) {
 		return
 	}
 
-	// Read frame
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
+	// Read WebSocket text frame
+	payload, err := wsutil.ReadClientText(conn)
 	if err != nil {
 		h.Unregister(client)
 		return
 	}
 
-	if n == 0 {
-		return
-	}
-
 	// Process inbound message
 	var msg ChatMessage
-	if err := json.Unmarshal(buf[:n], &msg); err != nil {
+	if err := json.Unmarshal(payload, &msg); err != nil {
 		log.Printf("Failed to unmarshal chat message: %v", err)
 		return
 	}

@@ -5,7 +5,6 @@ package websocket
 import (
 	"fmt"
 	"net"
-	"reflect"
 	"sync"
 	"syscall"
 
@@ -80,8 +79,22 @@ func (e *Epoll) Wait() ([]net.Conn, error) {
 }
 
 func socketFD(conn net.Conn) int {
-	tcpConn := reflect.Indirect(reflect.ValueOf(conn)).FieldByName("conn")
-	fdVal := reflect.Indirect(tcpConn).FieldByName("fd")
-	pfdVal := reflect.Indirect(fdVal).FieldByName("pfd")
-	return int(pfdVal.FieldByName("Sysfd").Int())
+	sc, ok := conn.(interface {
+		SyscallConn() (syscall.RawConn, error)
+	})
+	if !ok {
+		return 0
+	}
+	rawConn, err := sc.SyscallConn()
+	if err != nil {
+		return 0
+	}
+	var fdVal int
+	err = rawConn.Control(func(fd uintptr) {
+		fdVal = int(fd)
+	})
+	if err != nil {
+		return 0
+	}
+	return fdVal
 }
