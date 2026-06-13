@@ -6,8 +6,7 @@ services:
     name: nexaverse-mvp
     env: docker
     plan: free
-    rootDir: go-gateway
-    dockerfilePath: Dockerfile
+    dockerfilePath: go-gateway/Dockerfile
     envVars:
       - key: REDIS_URL
         sync: false

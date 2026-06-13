@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -127,14 +128,25 @@ func main() {
 			return
 		}
 
-		if path == "/" {
+		if path == "/health" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"online","service":"nexaverse-gateway"}`))
 			return
 		}
 
-		http.NotFound(w, r)
+		// Fallback to serving the frontend web client static assets
+		cleanedPath := filepath.Clean(path)
+		filePath := filepath.Join("dist", cleanedPath)
+
+		// Check if the requested file exists and is not a directory
+		if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+			http.ServeFile(w, r, filePath)
+			return
+		}
+
+		// Default SPA fallback: serve index.html for all other paths
+		http.ServeFile(w, r, filepath.Join("dist", "index.html"))
 	})
 
 	port := os.Getenv("PORT")
