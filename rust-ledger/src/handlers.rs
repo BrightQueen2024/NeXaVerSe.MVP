@@ -53,8 +53,10 @@ pub async fn wallet_transfer(
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
     }
 
-    // Mock sender user ID from token session (normally extracted from auth middleware)
-    let sender_id = "user_sender_123"; 
+    let sender_id = match req.headers().get("X-User-Id") {
+        Some(val) => val.to_str().unwrap_or("user_sender_123"),
+        None => "user_sender_123",
+    };
 
     // Execute in transaction
     let mut tx = match pool.begin().await {
@@ -62,7 +64,7 @@ pub async fn wallet_transfer(
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
     };
 
-    // 1. Fetch sender balance and check funds
+    // 1. Fetch sender balance, auto-provision with default balance if not exists
     let sender: (Decimal, bool) = match sqlx::query_as(
         "SELECT offchain_balance, kyc_verified FROM wallet_accounts WHERE user_id = $1 FOR UPDATE"
     )
@@ -70,7 +72,20 @@ pub async fn wallet_transfer(
     .fetch_one(&mut *tx)
     .await {
         Ok(b) => b,
-        Err(_) => return HttpResponse::BadRequest().body("Sender wallet not found"),
+        Err(_) => {
+            let new_id = Uuid::new_v4();
+            if let Err(e) = sqlx::query(
+                "INSERT INTO wallet_accounts (id, user_id, public_key, offchain_balance, kyc_verified)
+                 VALUES ($1, $2, 'ssh-ed25519-placeholder-key', 5000.00, FALSE)"
+            )
+            .bind(new_id)
+            .bind(sender_id)
+            .execute(&mut *tx)
+            .await {
+                return HttpResponse::InternalServerError().body(e.to_string());
+            }
+            (Decimal::new(5000, 0), false)
+        }
     };
 
     let (offchain_balance, kyc_verified) = sender;
@@ -82,6 +97,31 @@ pub async fn wallet_transfer(
     let kyc_threshold = Decimal::new(1000, 0);
     if body.amount > kyc_threshold && !kyc_verified {
         return HttpResponse::Forbidden().body("Transaction exceeds unverified threshold (1000 NEXA). Please complete face/biometric KYC.");
+    }
+
+    // Make sure receiver wallet exists, auto-provision if not exists
+    let receiver_exists: (bool,) = match sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM wallet_accounts WHERE user_id = $1)"
+    )
+    .bind(&body.receiver_id)
+    .fetch_one(&mut *tx)
+    .await {
+        Ok(r) => r,
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+
+    if !receiver_exists.0 {
+        let new_id = Uuid::new_v4();
+        if let Err(e) = sqlx::query(
+            "INSERT INTO wallet_accounts (id, user_id, public_key, offchain_balance, kyc_verified)
+             VALUES ($1, $2, 'ssh-ed25519-placeholder-key', 0.00, FALSE)"
+        )
+        .bind(new_id)
+        .bind(&body.receiver_id)
+        .execute(&mut *tx)
+        .await {
+            return HttpResponse::InternalServerError().body(e.to_string());
+        }
     }
 
     // 2. Deduct from sender
@@ -153,14 +193,17 @@ pub async fn escrow_create(
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
     }
 
-    let buyer_id = "user_buyer_456";
+    let buyer_id = match req.headers().get("X-User-Id") {
+        Some(val) => val.to_str().unwrap_or("user_buyer_456"),
+        None => "user_buyer_456",
+    };
 
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
     };
 
-    // Deduct offchain_balance and add to reserved_escrow_balance
+    // Deduct offchain_balance and add to reserved_escrow_balance, auto-provision with default balance if not exists
     let buyer: (Decimal, bool) = match sqlx::query_as(
         "SELECT offchain_balance, kyc_verified FROM wallet_accounts WHERE user_id = $1 FOR UPDATE"
     )
@@ -168,7 +211,20 @@ pub async fn escrow_create(
     .fetch_one(&mut *tx)
     .await {
         Ok(b) => b,
-        Err(_) => return HttpResponse::BadRequest().body("Buyer wallet not found"),
+        Err(_) => {
+            let new_id = Uuid::new_v4();
+            if let Err(e) = sqlx::query(
+                "INSERT INTO wallet_accounts (id, user_id, public_key, offchain_balance, kyc_verified)
+                 VALUES ($1, $2, 'ssh-ed25519-placeholder-key', 5000.00, FALSE)"
+            )
+            .bind(new_id)
+            .bind(buyer_id)
+            .execute(&mut *tx)
+            .await {
+                return HttpResponse::InternalServerError().body(e.to_string());
+            }
+            (Decimal::new(5000, 0), false)
+        }
     };
 
     let (offchain_balance, kyc_verified) = buyer;
@@ -180,6 +236,31 @@ pub async fn escrow_create(
     let kyc_threshold = Decimal::new(1000, 0);
     if body.amount > kyc_threshold && !kyc_verified {
         return HttpResponse::Forbidden().body("Escrow lock amount exceeds unverified threshold (1000 NEXA). Please complete face/biometric KYC.");
+    }
+
+    // Make sure seller wallet exists, auto-provision if not exists
+    let seller_exists: (bool,) = match sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM wallet_accounts WHERE user_id = $1)"
+    )
+    .bind(&body.seller_id)
+    .fetch_one(&mut *tx)
+    .await {
+        Ok(r) => r,
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+
+    if !seller_exists.0 {
+        let new_id = Uuid::new_v4();
+        if let Err(e) = sqlx::query(
+            "INSERT INTO wallet_accounts (id, user_id, public_key, offchain_balance, kyc_verified)
+             VALUES ($1, $2, 'ssh-ed25519-placeholder-key', 0.00, FALSE)"
+        )
+        .bind(new_id)
+        .bind(&body.seller_id)
+        .execute(&mut *tx)
+        .await {
+            return HttpResponse::InternalServerError().body(e.to_string());
+        }
     }
 
     sqlx::query(
@@ -327,17 +408,28 @@ pub async fn kyc_webhook(
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
     };
 
-    match sqlx::query("UPDATE wallet_accounts SET kyc_verified = TRUE, updated_at = NOW() WHERE user_id = $1")
+    let rows_affected = match sqlx::query("UPDATE wallet_accounts SET kyc_verified = TRUE, updated_at = NOW() WHERE user_id = $1")
         .bind(&body.user_id)
         .execute(&mut *tx)
         .await
     {
-        Ok(res) => {
-            if res.rows_affected() == 0 {
-                return HttpResponse::NotFound().body("User wallet not found");
-            }
-        }
+        Ok(res) => res.rows_affected(),
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+
+    if rows_affected == 0 {
+        // Auto-provision wallet account on KYC webhook success
+        let new_id = Uuid::new_v4();
+        if let Err(e) = sqlx::query(
+            "INSERT INTO wallet_accounts (id, user_id, public_key, offchain_balance, kyc_verified)
+             VALUES ($1, $2, 'ssh-ed25519-placeholder-key', 5000.00, TRUE)"
+        )
+        .bind(new_id)
+        .bind(&body.user_id)
+        .execute(&mut *tx)
+        .await {
+            return HttpResponse::InternalServerError().body(e.to_string());
+        }
     }
 
     if let Err(e) = tx.commit().await {

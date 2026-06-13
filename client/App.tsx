@@ -57,6 +57,32 @@ export default function App() {
   const [escrowAmount, setEscrowAmount] = useState('150.00');
   const [escrowItem, setEscrowItem] = useState('Cybernetic Genesis Visor #949');
   const [escrowLogs, setEscrowLogs] = useState<string[]>(['No active vault locked on-chain.']);
+  const [lastEscrowId, setLastEscrowId] = useState<string | null>(null);
+
+  const getHttpUrl = () => {
+    const wsUrl = process.env.EXPO_PUBLIC_GATEWAY_URL || 'ws://localhost:8080';
+    return wsUrl.replace(/^ws/, 'http');
+  };
+
+  useEffect(() => {
+    const fetchKycStatus = async () => {
+      try {
+        const httpUrl = getHttpUrl();
+        const res = await fetch(`${httpUrl}/kyc/status/${userId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status) {
+            setKycStatus(data.status);
+          }
+        }
+      } catch (err) {
+        console.log('KYC status fetch error:', err);
+      }
+    };
+    if (isAuthenticated) {
+      fetchKycStatus();
+    }
+  }, [userId, activeTab, isAuthenticated]);
 
   // Dynamic Rank Engine
   useEffect(() => {
@@ -130,9 +156,26 @@ export default function App() {
     try {
       const derivedAddress = await BiometricWalletService.createSecuredWallet();
       if (derivedAddress) {
-        setAddress(derivedAddress);
-        setXp(prev => prev + 1500); // Level XP reward
-        Alert.alert('Wallet Activated', `Secure Enclave Key registered.\nAddress: ${derivedAddress}`);
+        // Register key on backend MongoDB Atlas
+        const httpUrl = getHttpUrl();
+        const res = await fetch(`${httpUrl}/kyc/register-biometrics`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId,
+            biometricPublicKey: 'ssh-ed25519-mock-biometric-key-enclave',
+          }),
+        });
+
+        if (res.ok) {
+          setAddress(derivedAddress);
+          setXp(prev => prev + 1500); // Level XP reward
+          Alert.alert('Wallet Activated', `Secure Enclave Key registered and synced.\nAddress: ${derivedAddress}`);
+        } else {
+          Alert.alert('Registration Error', 'Failed to register biometric credentials on backend.');
+        }
       }
     } catch (e: any) {
       Alert.alert('Biometric Error', e.message);
@@ -151,8 +194,31 @@ export default function App() {
     try {
       const txHash = `0x-tx-hash-nexa-transfer-${Date.now()}`;
       const signature = await BiometricWalletService.signTransaction(txHash);
-      setXp(prev => prev + 500);
-      Alert.alert('Success', `Transaction signed successfully!\nSignature: ${signature.substring(0, 30)}...`);
+
+      const httpUrl = getHttpUrl();
+      const idempotencyKey = `idemp-tx-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+      const res = await fetch(`${httpUrl}/wallet/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey,
+          'X-User-Id': userId,
+        },
+        body: JSON.stringify({
+          receiver_id: receiverId,
+          amount: parseFloat(escrowAmount), // claim or transfer amount
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setXp(prev => prev + 500);
+        Alert.alert('Success', `Transaction signed & processed off-chain!\nOutbox ID: ${data.outbox_id}\nSignature: ${signature.substring(0, 30)}...`);
+      } else {
+        const errText = await res.text();
+        Alert.alert('Transaction Failed', errText || 'Transfer failed on backend ledger.');
+      }
     } catch (e: any) {
       Alert.alert('Auth Failed', e.message);
     } finally {
@@ -161,7 +227,7 @@ export default function App() {
   };
 
   // Trigger selfie matching mock KYC
-  const handleStartKYC = () => {
+  const handleStartKYC = async () => {
     setKycStatus('PENDING');
     setKycProgress(0);
     
@@ -172,21 +238,118 @@ export default function App() {
       setKycProgress(progress);
       if (progress >= 100) {
         clearInterval(interval);
-        setKycStatus('VERIFIED');
-        setXp(prev => prev + 3000); // Heavy XP grant
-        Alert.alert('KYC Verified', 'Facial recognition match: 99.1% similarity. On-chain trading limits unlocked.');
       }
-    }, 1000);
+    }, 500);
+
+    try {
+      const httpUrl = getHttpUrl();
+      const formData = new FormData();
+      formData.append('userId', userId);
+      
+      const blobSelfie = new Blob(['mock-selfie-data'], { type: 'image/jpeg' });
+      const blobDoc = new Blob(['mock-doc-data'], { type: 'image/jpeg' });
+      
+      formData.append('selfie', blobSelfie, 'selfie.jpg');
+      formData.append('document', blobDoc, 'passport.jpg');
+
+      const res = await fetch(`${httpUrl}/kyc/verify-face`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setKycStatus('VERIFIED');
+          setXp(prev => prev + 3000); // Heavy XP grant
+          Alert.alert('KYC Verified', 'Facial recognition match: 99.1% similarity. On-chain trading limits unlocked.');
+        } else {
+          setKycStatus('UNVERIFIED');
+          Alert.alert('KYC Failed', data.message || 'Facial verification failed.');
+        }
+      } else {
+        setKycStatus('UNVERIFIED');
+        Alert.alert('KYC Error', 'Server returned error during facial verification.');
+      }
+    } catch (err) {
+      setKycStatus('UNVERIFIED');
+      Alert.alert('Connection Error', 'KYC service is currently offline.');
+    }
   };
 
-  const handleEscrowLockSuccess = () => {
-    setXp(prev => prev + 2000);
-    setEscrowLogs(prev => [
-      `[${new Date().toLocaleTimeString()}] Escrow Lock Sealed.`,
-      `Asset: ${escrowItem}`,
-      `Locked Value: ${escrowAmount} NEXA`,
-      ...prev
-    ]);
+  const handleEscrowLockSuccess = async () => {
+    try {
+      const httpUrl = getHttpUrl();
+      const orderId = `order-${Date.now()}`;
+      const idempotencyKey = `escrow-lock-${Date.now()}`;
+
+      const res = await fetch(`${httpUrl}/escrow/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey,
+          'X-User-Id': userId,
+        },
+        body: JSON.stringify({
+          order_id: orderId,
+          seller_id: receiverId,
+          amount: parseFloat(escrowAmount),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setLastEscrowId(data.escrow_id);
+        setXp(prev => prev + 2000);
+        setEscrowLogs(prev => [
+          `[${new Date().toLocaleTimeString()}] Escrow Lock Sealed. ID: ${data.escrow_id}`,
+          `Asset: ${escrowItem}`,
+          `Locked Value: ${escrowAmount} NEXA`,
+          ...prev
+        ]);
+        Alert.alert('Success', `Vault Locked and Anchored on Ledger!\nEscrow ID: ${data.escrow_id}`);
+      } else {
+        const errorText = await res.text();
+        Alert.alert('Escrow Lock Failed', errorText);
+      }
+    } catch (err) {
+      Alert.alert('Connection Error', 'Failed to anchor escrow vault on ledger.');
+    }
+  };
+
+  const handleReleaseEscrow = async () => {
+    if (!lastEscrowId) return;
+    setLoading(true);
+    try {
+      const httpUrl = getHttpUrl();
+      const res = await fetch(`${httpUrl}/escrow/release/${lastEscrowId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          signature: 'ssh-ed25519-mock-buyer-delivery-signature',
+        }),
+      });
+
+      if (res.ok) {
+        setXp(prev => prev + 2500);
+        setEscrowLogs(prev => [
+          `[${new Date().toLocaleTimeString()}] Escrow Released! ID: ${lastEscrowId}`,
+          `Funds credited to seller account.`,
+          ...prev
+        ]);
+        Alert.alert('Escrow Released', `Funds successfully released to seller!\nEscrow ID: ${lastEscrowId}`);
+        setLastEscrowId(null);
+      } else {
+        const errorText = await res.text();
+        Alert.alert('Release Failed', errorText);
+      }
+    } catch (err) {
+      Alert.alert('Connection Error', 'Escrow engine is currently offline.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isMinor = parseInt(userAge) < 18;
@@ -576,6 +739,21 @@ export default function App() {
                       >
                         <Text style={styles.submitListingText}>Publish Escrow Offer</Text>
                       </TouchableOpacity>
+
+                      {lastEscrowId && (
+                        <View style={{ marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#222' }}>
+                          <Text style={styles.listingLabel}>Active Escrow Vault to Release:</Text>
+                          <View style={styles.addressBox}>
+                            <Text style={styles.addressBoxText} numberOfLines={1}>{lastEscrowId}</Text>
+                          </View>
+                          <TouchableOpacity 
+                            style={[styles.submitListingBtn, { backgroundColor: '#10b981' }]}
+                            onPress={handleReleaseEscrow}
+                          >
+                            <Text style={[styles.submitListingText, { color: '#070a10' }]}>🔑 Release Escrow Funds to Seller</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </CosmicCard>
                   </View>
                 )}
