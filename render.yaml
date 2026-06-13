@@ -3,7 +3,7 @@ services:
   # 1. Go WebSocket Gateway & Presence Node
   # ---------------------------------------------------------------------------
   - type: web
-    name: nexa-go-gateway
+    name: nexaverse-mvp
     env: docker
     plan: free
     rootDir: go-gateway
@@ -35,7 +35,7 @@ services:
   # 3. NestJS Social Feed & Media Processor
   # ---------------------------------------------------------------------------
   - type: web
-    name: nexa-nestjs-media
+    name: nexaverse-mvp-media
     env: docker
     plan: free
     rootDir: nestjs-media
