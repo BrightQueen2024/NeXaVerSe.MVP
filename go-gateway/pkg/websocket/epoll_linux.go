@@ -3,7 +3,6 @@
 package websocket
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"syscall"

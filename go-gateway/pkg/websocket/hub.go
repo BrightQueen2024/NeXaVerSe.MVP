@@ -64,8 +64,8 @@ func (h *Hub) Unregister(c *Client) {
 	defer h.lock.Unlock()
 
 	if _, exists := h.clients[c.ID]; exists {
-		delete(h.clients[c.ID])
-		delete(h.users[c.UserID])
+		delete(h.clients, c.ID)
+		delete(h.users, c.UserID)
 		_ = h.epoll.Remove(c.Conn)
 		_ = c.Close()
 		h.setPresence(c.UserID, "offline")
