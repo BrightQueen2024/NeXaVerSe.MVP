@@ -12,6 +12,8 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: EXPO_PUBLIC_GATEWAY_URL
+        sync: false
       - key: PORT
         value: "8080"
 
@@ -29,6 +31,8 @@ services:
         sync: false
       - key: RPC_PROVIDER_URL
         sync: false
+      - key: INTERNAL_SERVICE_SECRET
+        sync: false
       - key: PORT
         value: "8081"
 
@@ -45,6 +49,8 @@ services:
       - key: REDIS_URL
         sync: false
       - key: MONGODB_URI
+        sync: false
+      - key: INTERNAL_SERVICE_SECRET
         sync: false
       - key: PORT
         value: "8082"
