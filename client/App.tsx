@@ -58,6 +58,7 @@ export default function App() {
   const [escrowItem, setEscrowItem] = useState('Cybernetic Genesis Visor #949');
   const [escrowLogs, setEscrowLogs] = useState<string[]>(['No active vault locked on-chain.']);
   const [lastEscrowId, setLastEscrowId] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
 
   const getHttpUrl = () => {
     const wsUrl = process.env.EXPO_PUBLIC_GATEWAY_URL || 'ws://localhost:8080';
@@ -68,7 +69,11 @@ export default function App() {
     const fetchKycStatus = async () => {
       try {
         const httpUrl = getHttpUrl();
-        const res = await fetch(`${httpUrl}/kyc/status/${userId}`);
+        const res = await fetch(`${httpUrl}/kyc/status/${userId}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          }
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.status) {
@@ -79,10 +84,10 @@ export default function App() {
         console.log('KYC status fetch error:', err);
       }
     };
-    if (isAuthenticated) {
+    if (isAuthenticated && authToken) {
       fetchKycStatus();
     }
-  }, [userId, activeTab, isAuthenticated]);
+  }, [userId, activeTab, isAuthenticated, authToken]);
 
   // Dynamic Rank Engine
   useEffect(() => {
@@ -96,7 +101,7 @@ export default function App() {
   }, [xp]);
 
   // Connect to local WebSocket gateway
-  const connectChat = (currentUserId?: string, currentUserAge?: string) => {
+  const connectChat = (token: string, currentUserId?: string, currentUserAge?: string) => {
     if (ws) ws.close();
     
     const targetId = currentUserId || userId;
@@ -104,7 +109,7 @@ export default function App() {
     
     try {
       const gatewayUrl = process.env.EXPO_PUBLIC_GATEWAY_URL || 'ws://localhost:8080';
-      const socket = new WebSocket(`${gatewayUrl}/ws?user_id=${targetId}&age=${targetAge}`);
+      const socket = new WebSocket(`${gatewayUrl}/ws?token=${token}`);
       
       socket.onopen = () => {
         Alert.alert('Connected', `Securely connected as ${targetId} (Age: ${targetAge})`);
@@ -162,6 +167,7 @@ export default function App() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
           },
           body: JSON.stringify({
             userId: userId,
@@ -204,6 +210,7 @@ export default function App() {
           'Content-Type': 'application/json',
           'X-Idempotency-Key': idempotencyKey,
           'X-User-Id': userId,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           receiver_id: receiverId,
@@ -254,6 +261,9 @@ export default function App() {
 
       const res = await fetch(`${httpUrl}/kyc/verify-face`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
         body: formData,
       });
 
@@ -289,6 +299,7 @@ export default function App() {
           'Content-Type': 'application/json',
           'X-Idempotency-Key': idempotencyKey,
           'X-User-Id': userId,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           order_id: orderId,
@@ -326,6 +337,7 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           signature: 'ssh-ed25519-mock-buyer-delivery-signature',
@@ -394,13 +406,32 @@ export default function App() {
 
             <TouchableOpacity
               style={styles.loginBtn}
-              onPress={() => {
+              onPress={async () => {
                 if (!userId.trim()) {
                   Alert.alert('Error', 'Please enter a valid User Identity.');
                   return;
                 }
-                setIsAuthenticated(true);
-                connectChat(userId, userAge);
+                setLoading(true);
+                try {
+                  const httpUrl = getHttpUrl();
+                  const loginRes = await fetch(`${httpUrl}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, age: parseInt(userAge) }),
+                  });
+                  if (loginRes.ok) {
+                    const loginData = await loginRes.json();
+                    setAuthToken(loginData.token);
+                    setIsAuthenticated(true);
+                    connectChat(loginData.token, userId, userAge);
+                  } else {
+                    Alert.alert('Auth Failed', 'Gateway login returned an error status.');
+                  }
+                } catch (err) {
+                  Alert.alert('Connection Error', 'Authentication gateway is offline.');
+                } finally {
+                  setLoading(false);
+                }
               }}
             >
               <Text style={styles.loginBtnText}>Establish Connection Grid</Text>
@@ -418,9 +449,28 @@ export default function App() {
                 try {
                   const success = await BiometricWalletService.authenticate();
                   if (success) {
-                    setIsAuthenticated(true);
-                    connectChat(userId, userAge);
-                    Alert.alert('Biometric Login Success', 'Hardware credentials authorized.');
+                    setLoading(true);
+                    try {
+                      const httpUrl = getHttpUrl();
+                      const loginRes = await fetch(`${httpUrl}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: userId, age: parseInt(userAge) }),
+                      });
+                      if (loginRes.ok) {
+                        const loginData = await loginRes.json();
+                        setAuthToken(loginData.token);
+                        setIsAuthenticated(true);
+                        connectChat(loginData.token, userId, userAge);
+                        Alert.alert('Biometric Login Success', 'Hardware credentials authorized.');
+                      } else {
+                        Alert.alert('Auth Failed', 'Gateway login returned an error status.');
+                      }
+                    } catch (err) {
+                      Alert.alert('Connection Error', 'Authentication gateway is offline.');
+                    } finally {
+                      setLoading(false);
+                    }
                   } else {
                     Alert.alert('Biometric Login Failed', 'Hardware check returned false.');
                   }
@@ -582,7 +632,7 @@ export default function App() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.connectButton} onPress={() => connectChat()}>
+            <TouchableOpacity style={styles.connectButton} onPress={() => connectChat(authToken || '')}>
               <Text style={styles.connectButtonText}>{ws ? 'Re-Connect WebSocket Node' : 'Establish Presence Connection'}</Text>
             </TouchableOpacity>
 
