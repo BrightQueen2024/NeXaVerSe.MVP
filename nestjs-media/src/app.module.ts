@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DatabaseModule } from './database/database.module';
 import { MediaController } from './media/media.controller';
 import { MediaService } from './media/media.service';
 import { FeedController } from './feed/feed.controller';
@@ -7,7 +8,7 @@ import { KycController } from './kyc/kyc.controller';
 import { KycService } from './kyc/kyc.service';
 
 @Module({
-  imports: [],
+  imports: [DatabaseModule],
   controllers: [MediaController, FeedController, KycController],
   providers: [MediaService, FeedService, KycService],
 })

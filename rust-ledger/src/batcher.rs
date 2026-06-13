@@ -29,7 +29,9 @@ pub struct L2Batcher {
 
 impl L2Batcher {
     pub fn new(pool: PgPool) -> Self {
-        let provider_url = std::env::var("L2_RPC_URL").unwrap_or_else(|_| "http://localhost:8545".to_string());
+        let provider_url = std::env::var("RPC_PROVIDER_URL")
+            .or_else(|_| std::env::var("L2_RPC_URL"))
+            .unwrap_or_else(|_| "http://localhost:8545".to_string());
         
         // Load contract addresses
         let token_addr = std::env::var("NEXACOIN_TOKEN_ADDRESS")

@@ -1,21 +1,45 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import Redis from 'ioredis';
+import { Db } from 'mongodb';
 
 @Injectable()
 export class KycService {
   private readonly logger = new Logger(KycService.name);
   private redis: Redis;
 
-  constructor() {
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-    });
+  constructor(@Inject('MONGO_DB') private db: Db) {
+    if (process.env.REDIS_URL) {
+      this.redis = new Redis(process.env.REDIS_URL);
+    } else {
+      this.redis = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      });
+    }
   }
 
   async registerBiometrics(userId: string, biometricPublicKey: string) {
     this.logger.log(`Registering biometric Secure Enclave public key for user: ${userId}`);
     await this.redis.set(`kyc:biometrics:${userId}`, biometricPublicKey);
+
+    // Persistent pipeline with MongoDB Atlas cluster
+    try {
+      await this.db.collection('kyc_records').updateOne(
+        { userId },
+        {
+          $set: {
+            biometricPublicKey,
+            registeredAt: new Date(),
+            updatedAt: new Date(),
+          }
+        },
+        { upsert: true }
+      );
+      this.logger.log(`Persisted biometric public key to MongoDB Atlas for ${userId}`);
+    } catch (err) {
+      this.logger.error(`MongoDB connection error during registerBiometrics: ${err.message}`);
+    }
+
     return {
       success: true,
       message: 'Biometric Secure Enclave key registered successfully.',
@@ -31,9 +55,32 @@ export class KycService {
     // Simulate facial recognition processing delay and Rekognition similarity comparison
     const matchConfidence = this.simulateFacialComparison(selfie, document);
 
-    if (matchConfidence >= 95.0) {
+    const isVerified = matchConfidence >= 95.0;
+    const status = isVerified ? 'VERIFIED' : 'FAILED';
+
+    await this.redis.set(`kyc:status:${userId}`, status);
+
+    // Save persistent verification pipeline status in MongoDB Atlas
+    try {
+      await this.db.collection('kyc_records').updateOne(
+        { userId },
+        {
+          $set: {
+            status,
+            faceMatchConfidence: matchConfidence,
+            verifiedAt: new Date(),
+            updatedAt: new Date(),
+          }
+        },
+        { upsert: true }
+      );
+      this.logger.log(`Persisted facial verification state to MongoDB Atlas for ${userId}`);
+    } catch (err) {
+      this.logger.error(`MongoDB connection error during verifyFace: ${err.message}`);
+    }
+
+    if (isVerified) {
       this.logger.log(`Facial verification SUCCESS for user ${userId}. Match confidence: ${matchConfidence}%`);
-      await this.redis.set(`kyc:status:${userId}`, 'VERIFIED');
       
       // Update Rust Ledger service database state via webhook or direct API request
       await this.notifyLedgerOfKycSuccess(userId);
@@ -46,7 +93,6 @@ export class KycService {
       };
     } else {
       this.logger.warn(`Facial verification FAILED for user ${userId}. Match confidence: ${matchConfidence}%`);
-      await this.redis.set(`kyc:status:${userId}`, 'FAILED');
       return {
         success: false,
         status: 'FAILED',
@@ -57,7 +103,21 @@ export class KycService {
   }
 
   async getKycStatus(userId: string) {
-    const status = await this.redis.get(`kyc:status:${userId}`);
+    let status = await this.redis.get(`kyc:status:${userId}`);
+    
+    // Fallback to MongoDB Atlas query if cache misses
+    if (!status) {
+      try {
+        const record = await this.db.collection('kyc_records').findOne({ userId });
+        if (record && record.status) {
+          status = record.status;
+          await this.redis.set(`kyc:status:${userId}`, status);
+        }
+      } catch (err) {
+        this.logger.error(`Failed to fetch KYC record from MongoDB Atlas: ${err.message}`);
+      }
+    }
+
     return {
       userId,
       status: status || 'UNVERIFIED',
@@ -65,16 +125,6 @@ export class KycService {
   }
 
   private simulateFacialComparison(selfie: Express.Multer.File, document: Express.Multer.File): number {
-    // In production, this integrates with AWS Rekognition or FaceTec SDK:
-    // const params = {
-    //   SourceImage: { Bytes: document.buffer },
-    //   TargetImage: { Bytes: selfie.buffer },
-    //   SimilarityThreshold: 95.0
-    // };
-    // const response = await rekognition.compareFaces(params).promise();
-    // return response.FaceMatches[0].Similarity;
-
-    // Simulated check: if files are non-empty, simulate high match rate (98.5%) unless flagged
     if (selfie.size > 0 && document.size > 0) {
       if (selfie.originalname.includes('fail') || document.originalname.includes('fail')) {
         return 82.4; // Force fail logic for QA integration tests
@@ -87,11 +137,13 @@ export class KycService {
   private async notifyLedgerOfKycSuccess(userId: string) {
     this.logger.log(`Webhook callback dispatched: notifying rust-ledger of KYC state change for user ${userId}`);
     const ledgerUrl = process.env.LEDGER_URL || 'http://localhost:8081';
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || 'dev-secret-token';
     try {
       const response = await fetch(`${ledgerUrl}/wallet/kyc-webhook`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Internal-Token': internalSecret,
         },
         body: JSON.stringify({ user_id: userId }),
       });

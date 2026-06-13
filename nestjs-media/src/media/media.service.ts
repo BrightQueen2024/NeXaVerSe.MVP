@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import * as AWS from 'aws-sdk';
+import { Db } from 'mongodb';
 
 @Injectable()
 export class MediaService {
@@ -8,7 +9,7 @@ export class MediaService {
   private s3: AWS.S3;
   private rekognition: AWS.Rekognition;
 
-  constructor() {
+  constructor(@Inject('MONGO_DB') private db: Db) {
     const accessKeyId = process.env.AWS_ACCESS_KEY_ID || 'mock-key';
     const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || 'mock-secret';
     
@@ -51,6 +52,19 @@ export class MediaService {
 
     // Save metadata to database as 'PENDING'
     this.logger.log(`Persisting media metadata: ${mediaId} under PENDING moderation state.`);
+    this.db.collection('media_uploads').insertOne({
+      mediaId,
+      creatorId,
+      s3Url,
+      filename: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      status: 'PENDING_CLASSIFICATION',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).catch(err => {
+      this.logger.error(`MongoDB write failure: ${err.message}`);
+    });
 
     // Trigger Asynchronous Classification Worker (active Rekognition + local fallback)
     this.triggerAsyncClassification(mediaId, file.originalname, file.buffer, bucketName, fileKey);
@@ -117,7 +131,22 @@ export class MediaService {
         }
 
         this.logger.log(`AWS Rekognition complete for media ${mediaId}: category set to ${category}. Moderation state: VERIFIED.`);
-        // In production: updates PostgreSQL database post state
+        
+        // Update status in MongoDB
+        try {
+          await this.db.collection('media_uploads').updateOne(
+            { mediaId },
+            {
+              $set: {
+                status: 'VERIFIED',
+                category,
+                updatedAt: new Date(),
+              }
+            }
+          );
+        } catch (err) {
+          this.logger.error(`Failed to update media status in MongoDB: ${err.message}`);
+        }
         return;
       } catch (e) {
         this.logger.error(`AWS Rekognition error: ${e.message}. Falling back to default heuristics.`);
@@ -136,6 +165,20 @@ export class MediaService {
       }
 
       this.logger.log(`Local AI Heuristics complete for media ${mediaId}: category set to ${category}. Moderation state: VERIFIED.`);
+      
+      // Update status in MongoDB
+      this.db.collection('media_uploads').updateOne(
+        { mediaId },
+        {
+          $set: {
+            status: 'VERIFIED',
+            category,
+            updatedAt: new Date(),
+          }
+        }
+      ).catch(err => {
+        this.logger.error(`Failed to update media fallback status in MongoDB: ${err.message}`);
+      });
     }, 2000);
   }
 }

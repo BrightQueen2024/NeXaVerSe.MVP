@@ -71,6 +71,17 @@ services:
       "
 
   # ==========================================
+  # MONGO DATABASE FOR MEDIA SERVICE
+  # ==========================================
+  mongodb:
+    image: mongo:6.0-jammy
+    container_name: nexaverse-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+
+  # ==========================================
   # MICROSERVICES
   # ==========================================
   go-gateway:
@@ -83,6 +94,8 @@ services:
     environment:
       REDIS_ADDR: "redis:6379"
       PORT: "8080"
+      LEDGER_SERVICE_URL: "http://rust-ledger:8081"
+      MEDIA_SERVICE_URL: "http://nestjs-media:8082"
     depends_on:
       redis:
         condition: service_healthy
@@ -99,6 +112,7 @@ services:
       PORT: "8081"
       L2_RPC_URL: "https://arbitrum-sepolia.infura.io/v3/mock-project-id"
       NEXACOIN_CONTRACT: "0xFE73C654637D06606aC2263C70D06aC2263C70D0"
+      INTERNAL_SERVICE_SECRET: "mock-internal-secret"
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,13 +132,19 @@ services:
       AWS_SECRET_ACCESS_KEY: "mock-secret"
       S3_ENDPOINT: "http://minio:9000"
       S3_BUCKET_NAME: "nexa-media"
+      MONGODB_URI: "mongodb://mongodb:27017/nexaverse"
+      LEDGER_URL: "http://rust-ledger:8081"
+      INTERNAL_SERVICE_SECRET: "mock-internal-secret"
     depends_on:
       redis:
         condition: service_healthy
       minio:
         condition: service_healthy
+      mongodb:
+        condition: service_started
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
+  mongodata:

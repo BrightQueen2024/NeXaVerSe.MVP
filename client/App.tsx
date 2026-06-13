@@ -45,6 +45,9 @@ export default function App() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [isTyping, setIsTyping] = useState(false);
 
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   // KYC States
   const [kycStatus, setKycStatus] = useState<'UNVERIFIED' | 'PENDING' | 'VERIFIED'>('UNVERIFIED');
   const [kycProgress, setKycProgress] = useState(0);
@@ -67,15 +70,19 @@ export default function App() {
   }, [xp]);
 
   // Connect to local WebSocket gateway
-  const connectChat = () => {
+  const connectChat = (currentUserId?: string, currentUserAge?: string) => {
     if (ws) ws.close();
     
+    const targetId = currentUserId || userId;
+    const targetAge = currentUserAge || userAge;
+    
     try {
-      const socket = new WebSocket(`ws://localhost:8080/ws?user_id=${userId}&age=${userAge}`);
+      const gatewayUrl = process.env.EXPO_PUBLIC_GATEWAY_URL || 'ws://localhost:8080';
+      const socket = new WebSocket(`${gatewayUrl}/ws?user_id=${targetId}&age=${targetAge}`);
       
       socket.onopen = () => {
-        Alert.alert('Connected', `Logged in as ${userId} (Age: ${userAge})`);
-        setMessages(prev => [...prev, { sender: 'system', content: `Secure WS connected for ${userId}.` }]);
+        Alert.alert('Connected', `Securely connected as ${targetId} (Age: ${targetAge})`);
+        setMessages(prev => [...prev, { sender: 'system', content: `Secure WS connected for ${targetId}.` }]);
       };
 
       socket.onmessage = (event) => {
@@ -89,7 +96,7 @@ export default function App() {
 
       setWs(socket);
     } catch (e) {
-      Alert.alert('Connection Error', 'Local Go websocket gateway is currently offline.');
+      Alert.alert('Connection Error', 'Go websocket gateway is currently offline.');
     }
   };
 
@@ -183,6 +190,89 @@ export default function App() {
   };
 
   const isMinor = parseInt(userAge) < 18;
+
+  // Render login screen if unauthenticated
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.loginContainer}>
+        <StatusBar barStyle="light-content" />
+        <ScrollView contentContainerStyle={styles.loginContent}>
+          <View style={styles.loginHeader}>
+            <Text style={styles.loginLogoText}>NEXAVERSE</Text>
+            <Text style={styles.loginSubText}>DECENTRALIZED NODE GATEWAY</Text>
+          </View>
+          
+          <View style={styles.loginCard}>
+            <Text style={styles.loginCardTitle}>Secure Host Grid Node Auth</Text>
+            <Text style={styles.loginCardDesc}>
+              Configure your network credentials below to establish a secure WebSocket session.
+            </Text>
+
+            <Text style={styles.loginInputLabel}>User Identity (Node ID):</Text>
+            <TextInput
+              style={styles.loginInput}
+              value={userId}
+              onChangeText={setUserId}
+              placeholder="e.g. user_client_88"
+              placeholderTextColor="#555"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Text style={styles.loginInputLabel}>Age Parameters (Compliance check):</Text>
+            <TextInput
+              style={styles.loginInput}
+              value={userAge}
+              onChangeText={setUserAge}
+              placeholder="e.g. 16"
+              placeholderTextColor="#555"
+              keyboardType="numeric"
+            />
+
+            <TouchableOpacity
+              style={styles.loginBtn}
+              onPress={() => {
+                if (!userId.trim()) {
+                  Alert.alert('Error', 'Please enter a valid User Identity.');
+                  return;
+                }
+                setIsAuthenticated(true);
+                connectChat(userId, userAge);
+              }}
+            >
+              <Text style={styles.loginBtnText}>Establish Connection Grid</Text>
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.biometricLoginBtn}
+              onPress={async () => {
+                try {
+                  const success = await BiometricWalletService.authenticate();
+                  if (success) {
+                    setIsAuthenticated(true);
+                    connectChat(userId, userAge);
+                    Alert.alert('Biometric Login Success', 'Hardware credentials authorized.');
+                  } else {
+                    Alert.alert('Biometric Login Failed', 'Hardware check returned false.');
+                  }
+                } catch (err: any) {
+                  Alert.alert('Biometric Auth Error', err.message);
+                }
+              }}
+            >
+              <Text style={styles.biometricLoginBtnText}>🔑 Authenticate with Secure Enclave</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.appContainer}>
@@ -329,7 +419,7 @@ export default function App() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.connectButton} onPress={connectChat}>
+            <TouchableOpacity style={styles.connectButton} onPress={() => connectChat()}>
               <Text style={styles.connectButtonText}>{ws ? 'Re-Connect WebSocket Node' : 'Establish Presence Connection'}</Text>
             </TouchableOpacity>
 
@@ -1417,6 +1507,120 @@ const styles = StyleSheet.create({
   resetBtnText: {
     color: '#ef4444',
     fontSize: 11,
+    fontWeight: 'bold',
+  },
+  loginContainer: {
+    flex: 1,
+    backgroundColor: '#070A10', // Deep Void Black
+  },
+  loginContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  loginHeader: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  loginLogoText: {
+    color: '#ffffff',
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: 6,
+    textShadowColor: 'rgba(59, 130, 246, 0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  loginSubText: {
+    color: '#3b82f6',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    marginTop: 8,
+  },
+  loginCard: {
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.25)',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#3b82f6',
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+  },
+  loginCardTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  loginCardDesc: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  loginInputLabel: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginTop: 12,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  loginInput: {
+    backgroundColor: '#0c101a',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 8,
+    color: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+  },
+  loginBtn: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 24,
+    shadowColor: '#3b82f6',
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+  },
+  loginBtnText: {
+    color: '#070a10',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  dividerText: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginHorizontal: 12,
+  },
+  biometricLoginBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  biometricLoginBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });

@@ -307,9 +307,21 @@ pub async fn escrow_release(
 }
 
 pub async fn kyc_webhook(
+    req: HttpRequest,
     pool: web::Data<PgPool>,
     body: web::Json<KycWebhookRequest>,
 ) -> impl Responder {
+    // Zero-Trust internal authorization check
+    let internal_secret = std::env::var("INTERNAL_SERVICE_SECRET").unwrap_or_else(|_| "dev-secret-token".to_string());
+    let incoming_token = match req.headers().get("X-Internal-Token") {
+        Some(val) => val.to_str().unwrap_or(""),
+        None => return HttpResponse::Unauthorized().body("Missing X-Internal-Token header"),
+    };
+
+    if incoming_token != internal_secret {
+        return HttpResponse::Unauthorized().body("Invalid internal service token");
+    }
+
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
@@ -335,5 +347,5 @@ pub async fn kyc_webhook(
     HttpResponse::Ok().json(serde_json::json!({
         "status": "success",
         "message": format!("KYC status updated for user {}", body.user_id)
-    }))
+      }))
 }

@@ -12,10 +12,14 @@ export class FeedService {
   private readonly W_SHARE = 5.0;
 
   constructor() {
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-    });
+    if (process.env.REDIS_URL) {
+      this.redis = new Redis(process.env.REDIS_URL);
+    } else {
+      this.redis = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      });
+    }
   }
 
   // Record an engagement event inside hourly Redis buckets
