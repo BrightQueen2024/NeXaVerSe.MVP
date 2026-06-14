@@ -152,7 +152,9 @@ func main() {
 		}
 
 		isProxyRoute := strings.HasPrefix(path, "/wallet/") || strings.HasPrefix(path, "/escrow/") ||
-			strings.HasPrefix(path, "/media/") || strings.HasPrefix(path, "/feed/") || strings.HasPrefix(path, "/kyc/")
+			strings.HasPrefix(path, "/media/") || strings.HasPrefix(path, "/feed/") || strings.HasPrefix(path, "/kyc/") ||
+			strings.HasPrefix(path, "/marketplace/") || strings.HasPrefix(path, "/business/") || strings.HasPrefix(path, "/rewards/") ||
+			strings.HasPrefix(path, "/admin/")
 
 		if isProxyRoute {
 			authHeader := r.Header.Get("Authorization")
@@ -177,7 +179,7 @@ func main() {
 			return
 		}
 
-		if strings.HasPrefix(path, "/media/") || strings.HasPrefix(path, "/feed/") || strings.HasPrefix(path, "/kyc/") {
+		if strings.HasPrefix(path, "/media/") || strings.HasPrefix(path, "/feed/") || strings.HasPrefix(path, "/kyc/") || strings.HasPrefix(path, "/marketplace/") || strings.HasPrefix(path, "/business/") || strings.HasPrefix(path, "/rewards/") || strings.HasPrefix(path, "/admin/") {
 			mediaProxy(w, r)
 			return
 		}

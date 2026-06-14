@@ -41,8 +41,13 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .route("/wallet/transfer", web::post().to(handlers::wallet_transfer))
             .route("/wallet/kyc-webhook", web::post().to(handlers::kyc_webhook))
+            .route("/wallet/transactions", web::get().to(handlers::wallet_transactions))
             .route("/escrow/create", web::post().to(handlers::escrow_create))
             .route("/escrow/release/{id}", web::post().to(handlers::escrow_release))
+            .route("/staking/stake", web::post().to(handlers::staking_stake))
+            .route("/staking/unstake", web::post().to(handlers::staking_unstake))
+            .route("/staking/claim", web::post().to(handlers::staking_claim))
+            .route("/staking/dashboard/{user_id}", web::get().to(handlers::staking_dashboard))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run()
@@ -99,6 +104,30 @@ async fn bootstrap_db(pool: &sqlx::PgPool) {
         "CREATE TABLE IF NOT EXISTS idempotency_keys (
             key VARCHAR(255) PRIMARY KEY,
             created_at TIMESTAMP NOT NULL DEFAULT NOW()
+         )"
+    ).execute(pool).await.unwrap();
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS staking_positions (
+            id UUID PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            staked_amount NUMERIC(20, 8) NOT NULL,
+            tier VARCHAR(50) NOT NULL,
+            lock_start TIMESTAMP NOT NULL DEFAULT NOW(),
+            lock_end TIMESTAMP NOT NULL,
+            status VARCHAR(50) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+         )"
+    ).execute(pool).await.unwrap();
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS staking_rewards (
+            id UUID PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            reward_amount NUMERIC(20, 8) NOT NULL,
+            claimed BOOLEAN DEFAULT FALSE,
+            accrued_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            claimed_at TIMESTAMP
          )"
     ).execute(pool).await.unwrap();
 

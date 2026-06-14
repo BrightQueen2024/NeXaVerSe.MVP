@@ -68,21 +68,41 @@ export class FeedService {
 
     const totalNexaReward = es * multiplier * 0.1; // Base conversion factor of 0.1 NEXA per point
 
+    // Fetch creator's staking tier to apply booster multiplier
+    let stakingBooster = 1.0;
+    let stakingTier = 'NONE';
+    try {
+      const ledgerUrl = process.env.LEDGER_URL || 'http://localhost:8081';
+      const response = await fetch(`${ledgerUrl}/staking/dashboard/${creatorId}`);
+      if (response.ok) {
+        const stakingData = await response.json();
+        stakingTier = stakingData.current_tier || 'NONE';
+        if (stakingTier === 'BRONZE') stakingBooster = 1.0;
+        else if (stakingTier === 'SILVER') stakingBooster = 1.5;
+        else if (stakingTier === 'GOLD') stakingBooster = 2.2;
+        else if (stakingTier === 'PLATINUM') stakingBooster = 3.5;
+      }
+    } catch (err) {
+      this.logger.error(`Failed to fetch creator staking tier: ${err.message}`);
+    }
+
     // NexLink Content Routing Graph Split Check (Creator vs Linker)
     // Check if this content has a referral link relationship in Redis
     const linkerId = await this.redis.get(`nexlink:origin:${postId}`);
 
     if (linkerId) {
-      const creatorShare = totalNexaReward * 0.60;
+      const creatorShare = totalNexaReward * 0.60 * stakingBooster;
       const linkerShare = totalNexaReward * 0.40;
 
-      this.logger.log(`Post ${postId} contains active NexLink. Curation Split: 60% (${creatorShare} NEXA) to Creator ${creatorId}, 40% (${linkerShare} NEXA) to Linker ${linkerId}`);
+      this.logger.log(`Post ${postId} contains active NexLink. Curation Split: 60% with ${stakingBooster}x staking boost (${creatorShare} NEXA) to Creator ${creatorId}, 40% (${linkerShare} NEXA) to Linker ${linkerId}`);
 
       return {
         postId,
         engagementScore: es,
         multiplier,
-        totalReward: totalNexaReward,
+        stakingTier,
+        stakingBooster,
+        totalReward: creatorShare + linkerShare,
         splits: [
           { recipientId: creatorId, role: 'CREATOR', amount: creatorShare },
           { recipientId: linkerId, role: 'LINKER', amount: linkerShare }
@@ -90,13 +110,16 @@ export class FeedService {
       };
     }
 
+    const boostedTotal = totalNexaReward * stakingBooster;
     return {
       postId,
       engagementScore: es,
       multiplier,
-      totalReward: totalNexaReward,
+      stakingTier,
+      stakingBooster,
+      totalReward: boostedTotal,
       splits: [
-        { recipientId: creatorId, role: 'CREATOR', amount: totalNexaReward }
+        { recipientId: creatorId, role: 'CREATOR', amount: boostedTotal }
       ]
     };
   }

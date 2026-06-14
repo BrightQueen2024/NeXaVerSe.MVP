@@ -1,13 +1,17 @@
 import { Injectable, Logger, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import Redis from 'ioredis';
 import { Db } from 'mongodb';
+import { RewardsService } from '../rewards/rewards.service';
 
 @Injectable()
 export class KycService {
   private readonly logger = new Logger(KycService.name);
   private redis: Redis;
 
-  constructor(@Inject('MONGO_DB') private db: Db) {
+  constructor(
+    @Inject('MONGO_DB') private db: Db,
+    private readonly rewardsService: RewardsService
+  ) {
     if (process.env.REDIS_URL) {
       this.redis = new Redis(process.env.REDIS_URL);
     } else {
@@ -84,6 +88,11 @@ export class KycService {
       
       // Update Rust Ledger service database state via webhook or direct API request
       await this.notifyLedgerOfKycSuccess(userId);
+
+      // Trigger Referral reward disbursement check
+      this.rewardsService.processKycReward(userId).catch(err => {
+        this.logger.error(`Error processing KYC rewards check: ${err.message}`);
+      });
 
       return {
         success: true,

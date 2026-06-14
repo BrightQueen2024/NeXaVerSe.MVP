@@ -65,3 +65,36 @@ pub struct EscrowReleaseRequest {
 pub struct KycWebhookRequest {
     pub user_id: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct StakingPosition {
+    pub id: Uuid,
+    pub user_id: String,
+    pub staked_amount: rust_decimal::Decimal,
+    pub tier: String,
+    pub lock_start: NaiveDateTime,
+    pub lock_end: NaiveDateTime,
+    pub status: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct StakingReward {
+    pub id: Uuid,
+    pub user_id: String,
+    pub reward_amount: rust_decimal::Decimal,
+    pub claimed: bool,
+    pub accrued_at: NaiveDateTime,
+    pub claimed_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StakeRequest {
+    pub amount: rust_decimal::Decimal,
+    pub lock_days: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UnstakeRequest {
+    pub position_id: Uuid,
+}
