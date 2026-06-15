@@ -14,7 +14,7 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 
 # Build production compiled JS code (garbage collect aggressively)
-RUN NODE_OPTIONS="--max-old-space-size=512" npm run build
+RUN NODE_OPTIONS="--max-old-space-size=480" npm run build
 
 # Runner stage
 FROM node:20-alpine
