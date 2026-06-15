@@ -6,7 +6,7 @@ services:
     name: nexaverse-mvp
     env: docker
     plan: free
-    dockerfilePath: go-gateway/Dockerfile
+    dockerfilePath: apps/go-gateway/Dockerfile
     envVars:
       - key: REDIS_URL
         sync: false
@@ -24,7 +24,7 @@ services:
     name: nexaverse-mvp-ledger
     env: docker
     plan: free
-    rootDir: rust-ledger
+    rootDir: services/rust-ledger
     dockerfilePath: Dockerfile
     envVars:
       - key: DATABASE_URL
@@ -43,7 +43,7 @@ services:
     name: nexaverse-mvp-media
     env: docker
     plan: free
-    rootDir: nestjs-media
+    rootDir: services/nestjs-media
     dockerfilePath: Dockerfile
     envVars:
       - key: REDIS_URL

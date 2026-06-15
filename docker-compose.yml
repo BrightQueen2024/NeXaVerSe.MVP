@@ -86,7 +86,7 @@ services:
   # ==========================================
   go-gateway:
     build:
-      context: ./go-gateway
+      context: ./apps/go-gateway
       dockerfile: Dockerfile
     container_name: nexaverse-go-gateway
     ports:
@@ -102,7 +102,7 @@ services:
 
   rust-ledger:
     build:
-      context: ./rust-ledger
+      context: ./services/rust-ledger
       dockerfile: Dockerfile
     container_name: nexaverse-rust-ledger
     ports:
@@ -119,7 +119,7 @@ services:
 
   nestjs-media:
     build:
-      context: ./nestjs-media
+      context: ./services/nestjs-media
       dockerfile: Dockerfile
     container_name: nexaverse-nestjs-media
     ports:

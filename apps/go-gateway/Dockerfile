@@ -3,7 +3,7 @@ FROM node:18-alpine AS client-builder
 WORKDIR /client
 
 # Copy package files and install dependencies
-COPY client/package*.json ./
+COPY apps/client/package*.json ./
 RUN npm install
 
 # Pass the gateway URL from Render build environment to compile it in
@@ -11,7 +11,7 @@ ARG EXPO_PUBLIC_GATEWAY_URL
 ENV EXPO_PUBLIC_GATEWAY_URL=$EXPO_PUBLIC_GATEWAY_URL
 
 # Copy client source code
-COPY client/ ./
+COPY apps/client/ ./
 
 # Run expo export to generate the static files in /client/dist
 RUN npx expo export --platform web
@@ -24,11 +24,11 @@ WORKDIR /go-gateway
 RUN apk add --no-cache git ca-certificates
 
 # Copy go.mod and go.sum and download dependencies
-COPY go-gateway/go.mod go-gateway/go.sum ./
+COPY apps/go-gateway/go.mod apps/go-gateway/go.sum ./
 RUN go mod download
 
 # Copy gateway source code
-COPY go-gateway/ ./
+COPY apps/go-gateway/ ./
 
 # Build the binary with optimizations (disable CGO, compile for Linux, restrict compilation jobs)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -p 1 -ldflags="-w -s" -o go-gateway cmd/main.go

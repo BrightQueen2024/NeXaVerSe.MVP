@@ -21,16 +21,16 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: contracts/package-lock.json
+          cache-dependency-path: blockchain/contracts/package-lock.json
 
       - name: Install Dependencies
         run: |
-          cd contracts
+          cd blockchain/contracts
           npm ci
 
       - name: Compile & Test Smart Contracts
         run: |
-          cd contracts
+          cd blockchain/contracts
           npx hardhat test
 
       # Upload ABI artifacts for the Rust build stage dependency mapping
@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: compiled-contracts
-          path: contracts/artifacts/contracts/
+          path: blockchain/contracts/artifacts/contracts/
 
   # ==========================================
   # 2. GO GATEWAY COMPILATION & LINT
@@ -56,12 +56,12 @@ jobs:
 
       - name: Verify Go compilation
         run: |
-          cd go-gateway
+          cd apps/go-gateway
           go build -v ./...
 
       - name: Run Go Tests
         run: |
-          cd go-gateway
+          cd apps/go-gateway
           go test -v ./...
 
   # ==========================================
@@ -84,7 +84,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: compiled-contracts
-          path: contracts/artifacts/contracts/
+          path: blockchain/contracts/artifacts/contracts/
 
       - name: Cache Cargo Dependencies
         uses: actions/cache@v4
@@ -94,12 +94,12 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            rust-ledger/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-ledger/Cargo.toml') }}
+            services/rust-ledger/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('services/rust-ledger/Cargo.toml') }}
 
       - name: Cargo Check & Verify compilation
         run: |
-          cd rust-ledger
+          cd services/rust-ledger
           cargo check --verbose
 
   # ==========================================
@@ -116,11 +116,11 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: nestjs-media/package-lock.json
+          cache-dependency-path: services/nestjs-media/package-lock.json
 
       - name: Install Dependencies & Compile NestJS
         run: |
-          cd nestjs-media
+          cd services/nestjs-media
           npm ci
           npm run build
 
@@ -148,7 +148,7 @@ jobs:
       - name: Build Go Gateway Image
         uses: docker/build-push-action@v5
         with:
-          context: ./go-gateway
+          context: ./apps/go-gateway
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/nexa-go-gateway:latest
 
@@ -156,7 +156,7 @@ jobs:
       - name: Build Rust Ledger Image
         uses: docker/build-push-action@v5
         with:
-          context: ./rust-ledger
+          context: ./services/rust-ledger
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/nexa-rust-ledger:latest
 
@@ -164,6 +164,6 @@ jobs:
       - name: Build NestJS Media Image
         uses: docker/build-push-action@v5
         with:
-          context: ./nestjs-media
+          context: ./services/nestjs-media
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/nexa-nestjs-media:latest
