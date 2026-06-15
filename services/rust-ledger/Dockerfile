@@ -1,4 +1,3 @@
-# Step 1: Planning and dependency caching stage
 FROM rust:stable-slim AS builder
 
 WORKDIR /usr/src/app
