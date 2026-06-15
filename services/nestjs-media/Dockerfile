@@ -1,33 +1,36 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Step 1: Development & Build Stage
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package manifests
-COPY package.json ./
+# Copy package files from the current isolated directory
+COPY package*.json ./
 
-# Install all dependencies
-RUN npm install
+# Install ALL dependencies (including devDependencies like typescript)
+RUN npm ci
 
-# Copy source and configurations
-COPY tsconfig.json tsconfig.build.json ./
-COPY src ./src
+# Copy the rest of the microservice source code
+COPY . .
 
-# Build production compiled JS code
+# Compile TypeScript to production JavaScript
 RUN npm run build
 
-# Runner stage
-FROM node:20-alpine
+# Step 2: Clean Production Runtime Stage
+FROM node:18-alpine AS runner
 
 WORKDIR /app
 
-# Copy package manifests and install only production dependencies
-COPY package.json ./
-RUN npm install --only=production
+ENV NODE_ENV=production
 
-# Copy compiled code from builder stage
+# Copy package files again for production installs
+COPY package*.json ./
+
+# Install ONLY production dependencies to keep the image tiny
+RUN npm ci --only=production
+
+# Copy the compiled dist folder from the builder stage
 COPY --from=builder /app/dist ./dist
 
-EXPOSE 8082
+EXPOSE 3000
 
-ENTRYPOINT ["node", "dist/main"]
+CMD ["node", "dist/main.js"]
