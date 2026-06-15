@@ -867,8 +867,8 @@ pub async fn wallet_transactions(
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
     };
 
-    let records = match sqlx::query!(
-        "SELECT id, tx_type, sender_address, receiver_address, amount, status, created_at FROM transaction_outbox ORDER BY created_at DESC LIMIT 100"
+    let records: Vec<crate::models::TransactionOutbox> = match sqlx::query_as(
+        "SELECT * FROM transaction_outbox ORDER BY created_at DESC LIMIT 100"
     )
     .fetch_all(&mut *conn)
     .await {
