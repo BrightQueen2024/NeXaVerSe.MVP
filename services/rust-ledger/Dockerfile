@@ -1,38 +1,34 @@
-# Build stage
-FROM rust:slim AS builder
+# Step 1: Planning and dependency caching stage
+FROM rust:1.75-slim AS builder
 
-WORKDIR /app
+WORKDIR /usr/src/app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates & rm -rf /var/lib/apt/lists/*
+# Install system dependencies required for compiling crypto/ledger tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests
-COPY Cargo.toml ./
+# Copy the source code
+COPY . .
 
-# Create dummy source file to compile dependencies first (Docker cache optimization)
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release --jobs 1
-RUN rm -rf src
+# Build the release binary
+RUN cargo build --release
 
-# Copy real source code
-COPY src ./src
-COPY contracts ./contracts
-
-# Build the real binary
-# Touch main.rs to force cargo to rebuild it
-RUN touch src/main.rs && cargo build --release --jobs 1
-
-# Runner stage
+# Step 2: Ultra-lightweight runtime container
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies (OpenSSL certificates)
-RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install runtime security packages (like SSL certificates for blockchain calls)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy compiled binary from builder
-COPY --from=builder /app/target/release/rust-ledger .
+# Copy the compiled binary from the builder stage
+COPY --from=builder /usr/src/app/target/release/rust-ledger ./rust-ledger
 
-EXPOSE 8081
+EXPOSE 8080
 
-ENTRYPOINT ["./rust-ledger"]
+CMD ["./rust-ledger"]
