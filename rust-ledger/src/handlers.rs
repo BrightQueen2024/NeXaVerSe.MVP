@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use rust_decimal::Decimal;
 
-use crate::models::{TransferRequest, EscrowCreateRequest, EscrowReleaseRequest, KycWebhookRequest};
+use crate::models::{TransferRequest, EscrowCreateRequest, EscrowReleaseRequest, KycWebhookRequest, StakeRequest, UnstakeRequest};
 
 // Helper function to check idempotency key
 async fn verify_idempotency(
@@ -12,11 +12,12 @@ async fn verify_idempotency(
 ) -> Result<bool, sqlx::Error> {
     // Check if the key exists in Redis or Postgres sliding window.
     // Here we use a postgres-backed idempotency table check.
+    let mut conn = pool.acquire().await?;
     let exists: (bool,) = sqlx::query_as(
         "SELECT EXISTS(SELECT 1 FROM idempotency_keys WHERE key = $1 AND created_at > NOW() - INTERVAL '120 seconds')"
     )
     .bind(idempotency_key)
-    .fetch_one(pool)
+    .fetch_one(&mut *conn)
     .await?;
 
     if exists.0 {
@@ -26,7 +27,7 @@ async fn verify_idempotency(
     // Insert the key
     sqlx::query("INSERT INTO idempotency_keys (key) VALUES ($1) ON CONFLICT DO NOTHING")
         .bind(idempotency_key)
-        .execute(pool)
+        .execute(&mut *conn)
         .await?;
 
     Ok(true)
@@ -790,12 +791,17 @@ pub async fn staking_dashboard(
 ) -> impl Responder {
     let user_id = path.into_inner();
 
+    let mut conn = match pool.acquire().await {
+        Ok(c) => c,
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+
     // Fetch active positions
     let positions: Vec<crate::models::StakingPosition> = match sqlx::query_as(
         "SELECT * FROM staking_positions WHERE user_id = $1 AND status = 'ACTIVE'"
     )
     .bind(&user_id)
-    .fetch_all(&*pool)
+    .fetch_all(&mut *conn)
     .await {
         Ok(pos) => pos,
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
@@ -856,10 +862,15 @@ pub async fn staking_dashboard(
 pub async fn wallet_transactions(
     pool: web::Data<PgPool>,
 ) -> impl Responder {
+    let mut conn = match pool.acquire().await {
+        Ok(c) => c,
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+
     let records = match sqlx::query!(
         "SELECT id, tx_type, sender_address, receiver_address, amount, status, created_at FROM transaction_outbox ORDER BY created_at DESC LIMIT 100"
     )
-    .fetch_all(pool.get_ref())
+    .fetch_all(&mut *conn)
     .await {
         Ok(r) => r,
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),

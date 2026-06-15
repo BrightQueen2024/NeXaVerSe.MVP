@@ -56,6 +56,7 @@ async fn main() -> std::io::Result<()> {
 
 async fn bootstrap_db(pool: &sqlx::PgPool) {
     log::info!("Bootstrapping PostgreSQL database schema if missing...");
+    let mut conn = pool.acquire().await.expect("Failed to acquire DB connection for bootstrap");
     
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS wallet_accounts (
@@ -68,7 +69,7 @@ async fn bootstrap_db(pool: &sqlx::PgPool) {
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMP NOT NULL DEFAULT NOW()
          )"
-    ).execute(pool).await.unwrap();
+    ).execute(&mut *conn).await.unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS transaction_outbox (
@@ -84,7 +85,7 @@ async fn bootstrap_db(pool: &sqlx::PgPool) {
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             processed_at TIMESTAMP
          )"
-    ).execute(pool).await.unwrap();
+    ).execute(&mut *conn).await.unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS escrow_records (
@@ -98,14 +99,14 @@ async fn bootstrap_db(pool: &sqlx::PgPool) {
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMP NOT NULL DEFAULT NOW()
          )"
-    ).execute(pool).await.unwrap();
+    ).execute(&mut *conn).await.unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS idempotency_keys (
             key VARCHAR(255) PRIMARY KEY,
             created_at TIMESTAMP NOT NULL DEFAULT NOW()
          )"
-    ).execute(pool).await.unwrap();
+    ).execute(&mut *conn).await.unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS staking_positions (
@@ -118,7 +119,7 @@ async fn bootstrap_db(pool: &sqlx::PgPool) {
             status VARCHAR(50) NOT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT NOW()
          )"
-    ).execute(pool).await.unwrap();
+    ).execute(&mut *conn).await.unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS staking_rewards (
@@ -129,7 +130,7 @@ async fn bootstrap_db(pool: &sqlx::PgPool) {
             accrued_at TIMESTAMP NOT NULL DEFAULT NOW(),
             claimed_at TIMESTAMP
          )"
-    ).execute(pool).await.unwrap();
+    ).execute(&mut *conn).await.unwrap();
 
     log::info!("Database schema up to date.");
 }

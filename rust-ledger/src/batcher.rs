@@ -169,12 +169,13 @@ impl L2Batcher {
         }
 
         // Update database rows to SETTLED
+        let mut conn = self.pool.acquire().await?;
         sqlx::query(
             "UPDATE transaction_outbox SET status = 'SETTLED', l2_tx_hash = $1, processed_at = NOW() WHERE id = any($2)"
         )
         .bind(&mock_tx_hash)
         .bind(&ids)
-        .execute(&self.pool)
+        .execute(&mut *conn)
         .await?;
 
         log::info!("Successfully settled batch on-chain. TX Hash: {}", mock_tx_hash);
@@ -185,12 +186,13 @@ impl L2Batcher {
         let total_pool_balance: Decimal = Decimal::new(100_000_000, 0); // 100,000,000 NEXA
         let threshold = total_pool_balance * Decimal::new(5, 3); // 0.5% = 0.005
 
+        let mut conn = self.pool.acquire().await?;
         let sum_last_hour: Option<Decimal> = sqlx::query_scalar(
             "SELECT SUM(amount) FROM transaction_outbox 
              WHERE status = 'SETTLED' 
              AND processed_at > NOW() - INTERVAL '60 minutes'"
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *conn)
         .await?;
 
         let sum_amount = sum_last_hour.unwrap_or(Decimal::ZERO);
