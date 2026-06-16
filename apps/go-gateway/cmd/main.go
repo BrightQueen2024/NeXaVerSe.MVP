@@ -5,8 +5,10 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -105,6 +107,11 @@ func main() {
 		mediaURLStr = "http://localhost:8082"
 	}
 
+	secretKey := os.Getenv("INTERNAL_CLUSTER_SECRET")
+	if secretKey == "" {
+		secretKey = "nexaverse_fallback_secure_cluster_key_2026" // temporary fallback
+	}
+
 	ledgerProxy := proxyHandler(ledgerURLStr)
 	mediaProxy := proxyHandler(mediaURLStr)
 
@@ -180,6 +187,7 @@ func main() {
 			if r.URL.RawPath != "" {
 				r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, "/api/v1/ledger")
 			}
+			injectInternalHeaders(r, secretKey)
 			ledgerProxy(w, r)
 			return
 		}
@@ -189,16 +197,19 @@ func main() {
 			if r.URL.RawPath != "" {
 				r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, "/api/v1/media")
 			}
+			injectInternalHeaders(r, secretKey)
 			mediaProxy(w, r)
 			return
 		}
 
 		if strings.HasPrefix(path, "/wallet/") || strings.HasPrefix(path, "/escrow/") {
+			injectInternalHeaders(r, secretKey)
 			ledgerProxy(w, r)
 			return
 		}
 
 		if strings.HasPrefix(path, "/media/") || strings.HasPrefix(path, "/feed/") || strings.HasPrefix(path, "/kyc/") || strings.HasPrefix(path, "/marketplace/") || strings.HasPrefix(path, "/business/") || strings.HasPrefix(path, "/rewards/") || strings.HasPrefix(path, "/admin/") {
+			injectInternalHeaders(r, secretKey)
 			mediaProxy(w, r)
 			return
 		}
@@ -319,4 +330,21 @@ func verifyToken(tokenStr string) (string, int, error) {
 	}
 
 	return claims.UserID, claims.Age, nil
+}
+
+func injectInternalHeaders(r *http.Request, secretKey string) {
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	userID := r.Header.Get("X-User-Id")
+	
+	// Formulate the validation message context string
+	message := fmt.Sprintf("%s|%s|%s", timestamp, r.Method, userID)
+	
+	// Compute the HMAC-SHA256 signature
+	h := hmac.New(sha256.New, []byte(secretKey))
+	h.Write([]byte(message))
+	signature := hex.EncodeToString(h.Sum(nil))
+	
+	// Securely attach the cryptographic tokens to the downstream request headers
+	r.Header.Set("X-Internal-Signature", signature)
+	r.Header.Set("X-Internal-Timestamp", timestamp)
 }
