@@ -77,6 +77,7 @@ async fn main() -> std::io::Result<()> {
             .route("/staking/unstake", web::post().to(handlers::staking_unstake))
             .route("/staking/claim", web::post().to(handlers::staking_claim))
             .route("/staking/dashboard/{user_id}", web::get().to(handlers::staking_dashboard))
+            .route("/health", web::get().to(|| async { actix_web::HttpResponse::Ok().body("OK") }))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run()
