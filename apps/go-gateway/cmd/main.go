@@ -154,7 +154,8 @@ func main() {
 		isProxyRoute := strings.HasPrefix(path, "/wallet/") || strings.HasPrefix(path, "/escrow/") ||
 			strings.HasPrefix(path, "/media/") || strings.HasPrefix(path, "/feed/") || strings.HasPrefix(path, "/kyc/") ||
 			strings.HasPrefix(path, "/marketplace/") || strings.HasPrefix(path, "/business/") || strings.HasPrefix(path, "/rewards/") ||
-			strings.HasPrefix(path, "/admin/")
+			strings.HasPrefix(path, "/admin/") ||
+			strings.HasPrefix(path, "/api/v1/ledger/") || strings.HasPrefix(path, "/api/v1/media/")
 
 		if isProxyRoute {
 			authHeader := r.Header.Get("Authorization")
@@ -172,6 +173,24 @@ func main() {
 			// Securely inject the verified claims to downstream microservices
 			r.Header.Set("X-User-Id", userID)
 			r.Header.Set("X-User-Age", strconv.Itoa(age))
+		}
+
+		if strings.HasPrefix(path, "/api/v1/ledger/") {
+			r.URL.Path = strings.TrimPrefix(path, "/api/v1/ledger")
+			if r.URL.RawPath != "" {
+				r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, "/api/v1/ledger")
+			}
+			ledgerProxy(w, r)
+			return
+		}
+
+		if strings.HasPrefix(path, "/api/v1/media/") {
+			r.URL.Path = strings.TrimPrefix(path, "/api/v1/media")
+			if r.URL.RawPath != "" {
+				r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, "/api/v1/media")
+			}
+			mediaProxy(w, r)
+			return
 		}
 
 		if strings.HasPrefix(path, "/wallet/") || strings.HasPrefix(path, "/escrow/") {
