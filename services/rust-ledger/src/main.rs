@@ -1,6 +1,7 @@
 use actix_web::{web, App, HttpServer, middleware::Logger};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgPoolOptions, PgConnectOptions};
 use std::env;
+use std::str::FromStr;
 
 mod models;
 mod handlers;
@@ -15,12 +16,40 @@ async fn main() -> std::io::Result<()> {
         "postgres://postgres:postgres@localhost:5432/nexaverse".to_string()
     });
 
-    log::info!("Connecting to PostgreSQL database...");
-    let pool = PgPoolOptions::new()
-        .max_connections(50)
-        .connect(&db_url)
-        .await
-        .expect("Failed to connect to database");
+    let connection_options = PgConnectOptions::from_str(&db_url)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+
+    let mut pool = None;
+    let max_attempts = 5;
+    let delay = std::time::Duration::from_secs(2);
+
+    for attempt in 1..=max_attempts {
+        log::info!("Connecting to PostgreSQL database (attempt {}/{})...", attempt, max_attempts);
+        match PgPoolOptions::new()
+            .max_connections(5)
+            .acquire_timeout(std::time::Duration::from_secs(3))
+            .connect_with(connection_options.clone())
+            .await
+        {
+            Ok(p) => {
+                pool = Some(p);
+                break;
+            }
+            Err(e) => {
+                log::warn!("Connection attempt {} failed: {}.", attempt, e);
+                if attempt < max_attempts {
+                    log::info!("Retrying in 2 seconds...");
+                    tokio::time::sleep(delay).await;
+                } else {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::ConnectionRefused,
+                        format!("Failed to connect to database after {} attempts: {}", max_attempts, e),
+                    ));
+                }
+            }
+        }
+    }
+    let pool = pool.unwrap();
 
     // Perform database schema creation
     bootstrap_db(&pool).await;
