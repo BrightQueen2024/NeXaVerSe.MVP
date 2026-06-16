@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -27,15 +27,18 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	var redisCli *redis.Client
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL != "" {
 		opt, err := redis.ParseURL(redisURL)
 		if err != nil {
-			log.Printf("Warning: Failed to parse REDIS_URL: %v", err)
+			slog.Warn("Failed to parse REDIS_URL", "error", err)
 		} else {
 			redisCli = redis.NewClient(opt)
-			log.Printf("Connected to Redis via REDIS_URL")
+			slog.Info("Connected to Redis via REDIS_URL")
 		}
 	}
 
@@ -47,19 +50,20 @@ func main() {
 		redisCli = redis.NewClient(&redis.Options{
 			Addr: redisAddr,
 		})
-		log.Printf("Connected to Redis via REDIS_ADDR at %s", redisAddr)
+		slog.Info("Connected to Redis via REDIS_ADDR", "addr", redisAddr)
 	}
 
 	// Test Redis connection
 	if err := redisCli.Ping(context.Background()).Err(); err != nil {
-		log.Printf("Warning: Failed to connect to Redis: %v", err)
+		slog.Warn("Failed to connect to Redis", "error", err)
 	} else {
-		log.Printf("Redis connection verified successfully")
+		slog.Info("Redis connection verified successfully")
 	}
 
 	hub, err := websocket.NewHub(redisCli)
 	if err != nil {
-		log.Fatalf("Failed to initialize hub: %v", err)
+		slog.Error("Failed to initialize hub", "error", err)
+		os.Exit(1)
 	}
 
 	// Start epoll/event loop in a separate goroutine
@@ -83,18 +87,18 @@ func main() {
 
 		conn, _, _, err := ws.UpgradeHTTP(r, w)
 		if err != nil {
-			log.Printf("WebSocket upgrade error: %v", err)
+			slog.Error("WebSocket upgrade error", "error", err)
 			return
 		}
 
 		client := websocket.NewClient(uuid.New().String(), userID, age, conn)
 		if err := hub.Register(client); err != nil {
-			log.Printf("Failed to register client: %v", err)
+			slog.Error("Failed to register client", "error", err)
 			_ = conn.Close()
 			return
 		}
 
-		log.Printf("User %s (Age: %d) connected successfully via WebSocket", userID, age)
+		slog.Info("User connected successfully via WebSocket", "user_id", userID, "age", age)
 	})
 
 	// Configure reverse proxies for REST microservices
@@ -240,20 +244,27 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("NeXaVerSe Go-Gateway listening on port %s", port)
+	slog.Info("NeXaVerSe Go-Gateway listening", "port", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("Server ListenAndServe failed: %v", err)
+		slog.Error("Server ListenAndServe failed", "error", err)
+		os.Exit(1)
 	}
 }
 
 func proxyHandler(target string) http.HandlerFunc {
 	targetURL, err := url.Parse(target)
 	if err != nil {
-		log.Fatalf("Failed to parse proxy target URL %s: %v", target, err)
+		slog.Error("Failed to parse proxy target URL", "target", target, "error", err)
+		os.Exit(1)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("Incoming request routed", 
+			"path", r.URL.Path, 
+			"method", r.Method, 
+			"user_id", r.Header.Get("X-User-Id"),
+		)
 		r.Host = targetURL.Host
 		proxy.ServeHTTP(w, r)
 	}
