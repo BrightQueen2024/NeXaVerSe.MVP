@@ -6,6 +6,7 @@ use std::str::FromStr;
 mod models;
 mod handlers;
 mod batcher;
+mod security;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -68,6 +69,19 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(pool.clone()))
             .wrap(Logger::default())
+            .wrap_fn(|req, srv| {
+                use futures_util::FutureExt;
+                if req.path() == "/health" {
+                    return srv.call(req).boxed_local();
+                }
+                match security::validate_internal_request(&req) {
+                    Ok(()) => srv.call(req).boxed_local(),
+                    Err(http_res) => {
+                        let res = req.into_response(http_res);
+                        async move { Ok(res) }.boxed_local()
+                    }
+                }
+            })
             .route("/wallet/transfer", web::post().to(handlers::wallet_transfer))
             .route("/wallet/kyc-webhook", web::post().to(handlers::kyc_webhook))
             .route("/wallet/transactions", web::get().to(handlers::wallet_transactions))
