@@ -1,7 +1,7 @@
 # Dependency directories
 node_modules/
 jspm_packages/
-web_packages/
+web_packages/cd 
 
 # Next.js and React Native Expo builds
 .expo/
