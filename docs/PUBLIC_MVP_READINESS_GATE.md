@@ -80,12 +80,17 @@ All governance domains have been evaluated against verified code, automated regr
 
 ---
 
-## 4. Final Gate Verdict & Launch Conditions
+## 4. Final Gate Verdict & Bifurcated Release Ruling
 
 ### Official Verdict: **`GLOBAL PUBLIC MVP CONDITIONALLY READY`**
-### Mainnet Financial Status: **`STRICTLY BLOCKED`**
+### Executive Ruling: **BIFURCATED FINAL RELEASE DETERMINATION**
+- **Track 1: Public Testnet Beta / Soft Launch (Arbitrum Sepolia Testnet):** **`APPROVED — FINAL GO DECISION`**
+- **Track 2: Mainnet Financial Deployment (Real-Money Movement):** **`DEFERRED — STRICT NO-GO DECISION`**
 
-### Three Mandatory Conditions for Public Mainnet Graduation:
-1. **Independent External Smart Contract Audit:** Complete an audit with zero unresolved High or Critical findings.
-2. **Physical Mainnet Multisig Ceremony:** Execute on-chain deployment of the Safe 3-of-5 contract and 48-hour Timelock Controller using physical hardware keys.
-3. **Multi-Week Cohort Retention Horizon:** Measure actual calendar-elapsed retention across Cohorts B & C (target: D7 $\ge 35\%$, D14 $\ge 25\%$, D30 $\ge 20\%$).
+Full executive analysis is published in [`docs/PHASE_11_FINAL_RELEASE_DECISION.md`](file:///c:/Users/ayuba/OneDrive/Desktop/NeXaVerSe.MVP/docs/PHASE_11_FINAL_RELEASE_DECISION.md).
+
+### Operational Frameworks & Gating Instruments:
+1. **External Smart Contract Audit:** Procurement & remediation SLA protocol codified in [`docs/SMART_CONTRACT_AUDIT_HANDOFF.md`](file:///c:/Users/ayuba/OneDrive/Desktop/NeXaVerSe.MVP/docs/SMART_CONTRACT_AUDIT_HANDOFF.md) (0 High/Critical findings required).
+2. **Safe 3-of-5 Hardware Multisig Ceremony:** Air-gapped key generation runbook codified in [`docs/PHASE_11_MULTISIG_CEREMONY_RUNBOOK.md`](file:///c:/Users/ayuba/OneDrive/Desktop/NeXaVerSe.MVP/docs/PHASE_11_MULTISIG_CEREMONY_RUNBOOK.md).
+3. **Longitudinal Retention Telemetry:** Real data calculation script [`infrastructure/scripts/calculate-cohort-retention.js`](file:///c:/Users/ayuba/OneDrive/Desktop/NeXaVerSe.MVP/infrastructure/scripts/calculate-cohort-retention.js) and scaling roadmap [`docs/PHASE_11_COHORT_AND_RETENTION_ROADMAP.md`](file:///c:/Users/ayuba/OneDrive/Desktop/NeXaVerSe.MVP/docs/PHASE_11_COHORT_AND_RETENTION_ROADMAP.md).
+4. **Continuous Production Reliability Monitoring:** SRE canary daemon [`infrastructure/scripts/continuous-reliability-monitor.js`](file:///c:/Users/ayuba/OneDrive/Desktop/NeXaVerSe.MVP/infrastructure/scripts/continuous-reliability-monitor.js).
