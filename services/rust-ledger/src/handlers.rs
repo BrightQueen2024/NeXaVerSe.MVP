@@ -59,6 +59,16 @@ pub async fn wallet_transfer(
         None => "user_sender_123",
     };
 
+    // Invariant: Transfer amount must be positive
+    if body.amount <= Decimal::ZERO {
+        return HttpResponse::BadRequest().body("Transfer amount must be greater than zero");
+    }
+
+    // Invariant: Sender cannot transfer to self
+    if sender_id == body.receiver_id {
+        return HttpResponse::BadRequest().body("Sender and receiver cannot be the same");
+    }
+
     // Execute in transaction
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
