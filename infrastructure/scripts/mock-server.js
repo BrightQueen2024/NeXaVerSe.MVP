@@ -56,6 +56,7 @@ const achievementBadges = {}; // userId -> [badgeKey]
 // Admin & Fraud Audit Mock Datastores
 const mockTransactions = [];
 const systemAlerts = [];
+const idempotencyCache = new Set();
 
 const PORT_GATEWAY = 8080;
 const PORT_LEDGER = 8081;
@@ -96,36 +97,60 @@ const gatewayHttpServer = http.createServer((req, res) => {
       }
     }
 
-    // 2. Gateway Reverse Proxy Routing
-    const isProxyRoute = path.startsWith('/wallet/') || path.startsWith('/escrow/') ||
-      path.startsWith('/media/') || path.startsWith('/feed/') || path.startsWith('/kyc/') ||
-      path.startsWith('/marketplace/') || path.startsWith('/business/') || path.startsWith('/rewards/') ||
-      path.startsWith('/staking/') || path.startsWith('/admin/');
-
-    if (isProxyRoute) {
+    // 1.5 Gateway feedback route
+    if (req.method === 'POST' && (path === '/api/v1/feedback' || path === '/feedback')) {
       const authHeader = req.headers['authorization'];
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.statusCode = 401;
         return res.end(JSON.stringify({ error: 'Authorization token required' }));
       }
-      
-      const token = authHeader.substring(7);
-      const tokenParts = token.split('-');
-      if (tokenParts.length < 3 || tokenParts[0] !== 'mock' || tokenParts[1] !== 'token') {
+      res.statusCode = 201;
+      return res.end(JSON.stringify({ status: 'success', message: 'Beta feedback ingested successfully' }));
+    }
+
+    // 2. Gateway Reverse Proxy Routing
+    let normalizedPath = path;
+    if (normalizedPath.startsWith('/api/v1/')) {
+      normalizedPath = normalizedPath.substring(7);
+    }
+
+    const isProxyRoute = normalizedPath.startsWith('/wallet/') || normalizedPath.startsWith('/escrow/') ||
+      normalizedPath.startsWith('/media/') || normalizedPath.startsWith('/feed/') || normalizedPath.startsWith('/kyc/') ||
+      normalizedPath.startsWith('/marketplace/') || normalizedPath.startsWith('/business/') || normalizedPath.startsWith('/rewards/') ||
+      normalizedPath.startsWith('/staking/') || normalizedPath.startsWith('/admin/');
+
+    if (isProxyRoute) {
+      const isPublicGet = req.method === 'GET' && (
+        normalizedPath.startsWith('/marketplace/products') ||
+        (normalizedPath.startsWith('/business/') && normalizedPath.endsWith('/profile')) ||
+        normalizedPath.startsWith('/staking/dashboard/')
+      );
+
+      let userId = 'anonymous';
+      let age = '20';
+
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const tokenParts = token.split('-');
+        if (tokenParts.length < 3 || tokenParts[0] !== 'mock' || tokenParts[1] !== 'token') {
+          res.statusCode = 401;
+          return res.end(JSON.stringify({ error: 'Invalid auth token' }));
+        }
+        userId = tokenParts[2];
+        age = tokenParts[3] || '20';
+      } else if (!isPublicGet) {
         res.statusCode = 401;
-        return res.end(JSON.stringify({ error: 'Invalid auth token' }));
+        return res.end(JSON.stringify({ error: 'Authorization token required' }));
       }
 
-      const userId = tokenParts[2];
-      const age = tokenParts[3] || '20';
-
       // Forward request to targeted microservice
-      const targetPort = (path.startsWith('/wallet/') || path.startsWith('/escrow/') || path.startsWith('/staking/')) ? PORT_LEDGER : PORT_MEDIA;
+      const targetPort = (normalizedPath.startsWith('/wallet/') || normalizedPath.startsWith('/escrow/') || normalizedPath.startsWith('/staking/')) ? PORT_LEDGER : PORT_MEDIA;
       
       const options = {
         hostname: '127.0.0.1',
         port: targetPort,
-        path: req.url,
+        path: normalizedPath + (parsedUrl.search || ''),
         method: req.method,
         headers: {
           ...req.headers,
@@ -237,8 +262,10 @@ const ledgerServer = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
 
-    if (req.method === 'GET' && parsedUrl.pathname === '/wallet/balance') {
-      const userId = req.headers['x-user-id'] || 'user_sender_123';
+    if (req.method === 'GET' && (parsedUrl.pathname === '/wallet/balance' || parsedUrl.pathname.startsWith('/wallet/'))) {
+      const parts = parsedUrl.pathname.split('/');
+      const pathUserId = (parts.length > 2 && parts[1] === 'wallet' && parts[2] !== 'balance' && parts[2] !== 'transactions') ? parts[2] : null;
+      const userId = pathUserId || req.headers['x-user-id'] || 'user_sender_123';
       if (!wallets[userId]) {
         wallets[userId] = {
           user_id: userId,
@@ -259,6 +286,28 @@ const ledgerServer = http.createServer((req, res) => {
     if (req.method === 'POST' && parsedUrl.pathname === '/wallet/transfer') {
       const payload = JSON.parse(body);
       const senderId = req.headers['x-user-id'] || 'user_sender_123';
+
+      // Financial Invariant: Positive amount
+      if (payload.amount <= 0) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ error: 'Transfer amount must be greater than zero' }));
+      }
+
+      // Financial Invariant: Sender != Receiver
+      if (payload.receiver_id === senderId) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ error: 'Sender and receiver cannot be the same' }));
+      }
+
+      // Idempotency Lock Check
+      const idempotencyKey = req.headers['x-idempotency-key'];
+      if (idempotencyKey) {
+        if (idempotencyCache.has(idempotencyKey)) {
+          res.statusCode = 409;
+          return res.end(JSON.stringify({ error: 'Duplicate transaction request' }));
+        }
+        idempotencyCache.add(idempotencyKey);
+      }
       if (!wallets[senderId]) {
         wallets[senderId] = {
           user_id: senderId,
