@@ -34,19 +34,19 @@ All governance domains have been evaluated against verified code, automated regr
 │   6. Incident Management & SLA:       [ 🟢 PASS - MTTA < 5m ]          │
 │   7. Smart Contract Audit:            [ 🟡 PENDING EXTERNAL AUDIT ]    │
 │   8. Known Contract Remediations:     [ 🟢 PASS ]                      │
-│   9. Mainnet Multisig Governance:     [ 🟢 PASS - SAFE 3-OF-5 ]        │
+│   9. Mainnet Multisig Governance:     [ 🟡 PARTIAL / CEREMONY PENDING ]│
 │  10. Wallet Integrity & Nonce / Gas:  [ 🟢 PASS ]                      │
 │  11. Nexapoints Accounting Invariant: [ 🟢 PASS - U + P + B = T ]      │
 │  12. AI Content Engine Reliability:   [ 🟢 PASS - CIRCUIT BREAKER ]    │
 │  13. Progressive Performance (5K):    [ 🟢 PASS - 198ms MEDIAN ]       │
 │  14. Clean Environment Rehearsal:     [ 🟢 PASS - 118s BOOTSTRAP ]     │
-│  15. Disaster Recovery (RTO/RPO):     [ 🟢 PASS - RTO 18s, RPO 0s ]    │
+│  15. Disaster Recovery (RTO/RPO):     [ 🟢 PASS - RTO 12s/18s, RPO 0s ]│
 │  16. Full-Stack Observability:        [ 🟢 PASS - ZERO-PII LOGS ]      │
 │  17. Production Security & Secrets:   [ 🟢 PASS - 0 EXPOSED SECRETS ]  │
 │  18. Dependency & Supply Chain:       [ 🟢 PASS - 0 CRITICAL CVES ]    │
 │  19. Privacy & Data Minimization:     [ 🟢 PASS - GDPR/NDPR EXPORT ]   │
 │  20. Global Beta Release Operations:  [ 🟢 PASS - CANARY RUNBOOK ]     │
-│  21. Documentation & Evidence Integrity:[ 🟢 PASS - 21 AUDIT DOCS ]   │
+│  21. Documentation & Evidence Integrity:[ 🟢 PASS - 22 AUDIT DOCS ]   │
 │                                                                        │
 │   FINAL DETERMINATION:        [ GLOBAL PUBLIC MVP CONDITIONALLY READY ]│
 │   MAINNET DEPLOYMENT:         [ STRICTLY BLOCKED ]                     │
