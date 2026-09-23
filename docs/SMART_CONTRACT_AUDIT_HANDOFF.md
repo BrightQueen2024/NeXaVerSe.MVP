@@ -60,3 +60,23 @@ Graduation from Arbitrum Sepolia Testnet to Arbitrum One Mainnet requires:
 1. Receipt of final signed external security audit report from an accredited firm.
 2. Complete remediation and verified sign-off on all identified Critical, High, and Medium vulnerabilities.
 3. Execution of the physical 3-of-5 Safe hardware multisig key ceremony and 48-hour timelock controller configuration.
+
+---
+
+## 6. Independent Audit Acceptance & Remediation Protocol
+
+### 6.1 Vulnerability Severity Triage & Response SLAs
+Upon receipt of the initial draft audit report, the core engineering and security team adheres to the following strict remediation timelines:
+
+| Severity Level | Definition | Remediation SLA | Required Operational Action |
+| :---: | :--- | :---: | :--- |
+| **CRITICAL** | Direct loss of user funds, unconstrained minting, broken access control. | **< 24 Hours** | Immediate code freeze; patch developed, unit tested, and submitted for auditor re-verification. Mainnet release blocked. |
+| **HIGH** | Denial of service of escrow release, frozen funds under edge cases, signature replay. | **< 48 Hours** | Patch developed and regression tested. Mainnet release blocked. |
+| **MEDIUM** | Inefficient gas consumption causing potential out-of-gas errors, non-fatal logic flaws. | **< 5 Business Days** | Remediation or documented formal risk acceptance signed by Lead Architect and Auditor. |
+| **LOW / INFO** | Code quality, naming conventions, style guide deviations. | **< 10 Business Days** | Cleaned up prior to final bytecode deployment. |
+
+### 6.2 Auditor Verification & Bytecode Hash Attestation
+Before mainnet deployment:
+1. All remediated commits must be submitted to the auditing firm for written re-test verification.
+2. The auditor's final signed report must cite the exact Git commit SHA of the audited repository.
+3. The deployed mainnet bytecode must match the compiler output from the audited commit hash with 100% byte-for-byte exactness as verified by Sourcify and Arbiscan.
