@@ -1,0 +1,47 @@
+{
+  "cohortId": "Cohort-A",
+  "name": "Initial Core Beta Explorers",
+  "elapsedCalendarDays": 1,
+  "totalInvited": 20,
+  "registeredCount": 18,
+  "registrationRatePct": 90,
+  "activatedCount": 14,
+  "activationRatePct": 70,
+  "retention": {
+    "D1": {
+      "status": "VERIFIED",
+      "evidenceTier": "[REAL USER]",
+      "activeCount": 13,
+      "retentionPct": 65,
+      "benchmarkPct": 40,
+      "passed": true
+    },
+    "D7": {
+      "status": "CALENDAR_UNELAPSED",
+      "evidenceTier": "[NOT VERIFIED]",
+      "activeCount": null,
+      "retentionPct": null,
+      "benchmarkPct": 35,
+      "passed": null,
+      "projectedEligibilityDate": "2026-09-29"
+    },
+    "D14": {
+      "status": "CALENDAR_UNELAPSED",
+      "evidenceTier": "[NOT VERIFIED]",
+      "activeCount": null,
+      "retentionPct": null,
+      "benchmarkPct": 25,
+      "passed": null,
+      "projectedEligibilityDate": "2026-10-06"
+    },
+    "D30": {
+      "status": "CALENDAR_UNELAPSED",
+      "evidenceTier": "[NOT VERIFIED]",
+      "activeCount": null,
+      "retentionPct": null,
+      "benchmarkPct": 20,
+      "passed": null,
+      "projectedEligibilityDate": "2026-10-22"
+    }
+  }
+}
