@@ -1,87 +1,87 @@
+/**
+ * NeXaVerSe Master Regression Test Runner
+ * Executes all automated test suites sequentially.
+ */
+
 const { spawn } = require('child_process');
 const path = require('path');
-const http = require('http');
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+const testSuites = [
+  'smoke-test.js',
+  'e2e-scenario-test.js',
+  'concurrency-stress-test.js',
+  'phase8-regression-test.js',
+  'phase9-regression-test.js',
+  'phase10-final-hardening-validation.js',
+  'international-expansion-test.js',
+  'chaos-fault-injection.js',
+  'phase11-evidence-reconciliation.js',
+  'phase12-master-validation.js'
+];
 
-function probeHealth() {
+let totalPassed = 0;
+let totalFailed = 0;
+
+function runSuite(suiteName) {
   return new Promise((resolve) => {
-    const req = http.get('http://127.0.0.1:8080/health', (res) => {
-      resolve(res.statusCode === 200);
+    console.log(`\n======================================================`);
+    console.log(`RUNNING SUITE: ${suiteName}`);
+    console.log(`======================================================`);
+    
+    const child = spawn('node', [path.join(__dirname, suiteName)], {
+      stdio: 'inherit',
+      cwd: __dirname
     });
-    req.on('error', () => resolve(false));
-    req.setTimeout(1000, () => {
-      req.destroy();
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        console.log(`--> SUITE PASSED: ${suiteName}`);
+        totalPassed++;
+        resolve(true);
+      } else {
+        console.error(`--> SUITE FAILED with exit code ${code}: ${suiteName}`);
+        totalFailed++;
+        resolve(false);
+      }
+    });
+
+    child.on('error', (err) => {
+      console.error(`--> ERROR launching ${suiteName}:`, err.message);
+      totalFailed++;
       resolve(false);
     });
   });
 }
 
-function runScript(scriptName) {
-  return new Promise((resolve) => {
-    console.log(`\n==============================================`);
-    console.log(`RUNNING: ${scriptName}`);
-    console.log(`==============================================\n`);
-    const proc = spawn('node', [path.join(__dirname, scriptName)], {
-      stdio: 'inherit',
-      env: process.env
-    });
-    proc.on('close', (code) => {
-      console.log(`\n[${scriptName}] Exited with code: ${code}`);
-      resolve(code === 0);
-    });
-  });
-}
+async function runAll() {
+  console.log('======================================================');
+  console.log(`STARTING NEXAVERSE REGRESSION SUITE (${testSuites.length} Suites)`);
+  console.log('======================================================');
 
-async function main() {
-  console.log('Starting Mock Server for Regression Suite...');
-  const mockServer = spawn('node', [path.join(__dirname, 'mock-server.js')], {
-    stdio: 'inherit',
-    env: { ...process.env, RATE_LIMIT_GENERAL_RPM: '5000', RATE_LIMIT_AUTH_RPM: '5000' }
-  });
+  const startTime = Date.now();
 
-  // Wait for health
-  let ready = false;
-  for (let i = 0; i < 10; i++) {
-    await sleep(500);
-    if (await probeHealth()) {
-      ready = true;
-      break;
+  for (const suite of testSuites) {
+    const success = await runSuite(suite);
+    if (!success) {
+      console.error(`\nSuite ${suite} failed. Continuing with remaining suites for full diagnosis...`);
     }
   }
 
-  if (!ready) {
-    console.error('Failed to start mock-server within 5s');
-    mockServer.kill();
+  const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  console.log(`\n======================================================`);
+  console.log(`ALL SUITES COMPLETED in ${durationSec}s`);
+  console.log(`Passed Suites: ${totalPassed} / ${testSuites.length}`);
+  console.log(`Failed Suites: ${totalFailed} / ${testSuites.length}`);
+  console.log('======================================================');
+
+  if (totalFailed > 0) {
+    console.error('REGRESSION RUN FAILED: One or more test suites reported errors.');
     process.exit(1);
+  } else {
+    console.log('REGRESSION RUN SUCCEEDED: All test suites passed cleanly!');
+    process.exit(0);
   }
-
-  const results = {};
-  results['admin-test.js'] = await runScript('admin-test.js');
-  results['rewards-test.js'] = await runScript('rewards-test.js');
-  results['e2e-test.js'] = await runScript('e2e-test.js');
-  results['phase6-alpha-validation.js'] = await runScript('phase6-alpha-validation.js');
-  results['phase7-alpha-ops.js'] = await runScript('phase7-alpha-ops.js');
-  results['phase8-global-mvp-validation.js'] = await runScript('phase8-global-mvp-validation.js');
-  results['phase9-release-candidate-validation.js'] = await runScript('phase9-release-candidate-validation.js');
-  results['phase10-final-hardening-validation.js'] = await runScript('phase10-final-hardening-validation.js');
-  results['phase11-global-beta-validation.js'] = await runScript('phase11-global-beta-validation.js');
-
-  console.log('\nStopping Mock Server...');
-  mockServer.kill();
-
-  console.log('\n==============================================');
-  console.log('REGRESSION SUITE RESULTS SUMMARY:');
-  console.log('==============================================');
-  let allOk = true;
-  for (const [script, ok] of Object.entries(results)) {
-    console.log(`${script}: ${ok ? 'PASSED' : 'FAILED'}`);
-    if (!ok) allOk = false;
-  }
-  console.log('==============================================');
-  process.exit(allOk ? 0 : 1);
 }
 
-main();
+runAll();

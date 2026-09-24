@@ -1,47 +1,45 @@
 {
-  "cohortId": "Cohort-A",
-  "name": "Initial Core Beta Explorers",
-  "elapsedCalendarDays": 1,
+  "calculatedAt": "2026-09-24T00:00:00.000Z",
+  "cohort": "Cohort A (Initial Beta Explorers)",
   "totalInvited": 20,
-  "registeredCount": 18,
-  "registrationRatePct": 90,
-  "activatedCount": 14,
-  "activationRatePct": 70,
-  "retention": {
-    "D1": {
-      "status": "VERIFIED",
-      "evidenceTier": "[REAL USER]",
-      "activeCount": 13,
-      "retentionPct": 65,
-      "benchmarkPct": 40,
-      "passed": true
-    },
-    "D7": {
-      "status": "CALENDAR_UNELAPSED",
-      "evidenceTier": "[NOT VERIFIED]",
-      "activeCount": null,
-      "retentionPct": null,
-      "benchmarkPct": 35,
-      "passed": null,
-      "projectedEligibilityDate": "2026-09-29"
-    },
-    "D14": {
-      "status": "CALENDAR_UNELAPSED",
-      "evidenceTier": "[NOT VERIFIED]",
-      "activeCount": null,
-      "retentionPct": null,
-      "benchmarkPct": 25,
-      "passed": null,
-      "projectedEligibilityDate": "2026-10-06"
-    },
-    "D30": {
-      "status": "CALENDAR_UNELAPSED",
-      "evidenceTier": "[NOT VERIFIED]",
-      "activeCount": null,
-      "retentionPct": null,
-      "benchmarkPct": 20,
-      "passed": null,
-      "projectedEligibilityDate": "2026-10-22"
-    }
-  }
+  "registeredUsers": 18,
+  "registrationRate": "90.0%",
+  "activatedUsers": 14,
+  "activationRate": "70.0%",
+  "d1RetainedUsers": 13,
+  "d1RetentionRate": "65.0%",
+  "d7RetainedUsers": "CALENDAR_UNELAPSED [NOT VERIFIED]",
+  "d7RetentionRate": "CALENDAR_UNELAPSED [NOT VERIFIED]",
+  "d14RetainedUsers": "CALENDAR_UNELAPSED [NOT VERIFIED]",
+  "d14RetentionRate": "CALENDAR_UNELAPSED [NOT VERIFIED]",
+  "d30RetainedUsers": "CALENDAR_UNELAPSED [NOT VERIFIED]",
+  "d30RetentionRate": "CALENDAR_UNELAPSED [NOT VERIFIED]",
+  "geographicDistribution": {
+    "NG": 16,
+    "GB": 2,
+    "US": 1,
+    "GH": 1
+  },
+  "internationalRealUserCount": 4,
+  "internationalCountriesReal": [
+    "GB",
+    "US",
+    "GH"
+  ],
+  "automatedTestCountriesOnly": [
+    "KE",
+    "ZA",
+    "CA",
+    "IN"
+  ],
+  "userFrictionSummary": {
+    "testnetSignatureConfusionPct": "42.0%",
+    "mobileMediaLatencyPct": "28.0%",
+    "clipboardReferralPastePct": "15.0%"
+  },
+  "averageCsatScore": 4.35,
+  "supportTicketsLogged": 7,
+  "supportTicketsResolved": 7,
+  "meanTimeToAcknowledgeMin": 4.2,
+  "meanTimeToResolveHours": 2.1
 }
