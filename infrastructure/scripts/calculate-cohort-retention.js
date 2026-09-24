@@ -47,7 +47,7 @@ const RETENTION_BENCHMARKS = {
   D30: { targetPct: 20.0, requiredElapsedDays: 30 }
 };
 
-function calculateCohortMetrics(cohort, evalDate = new Date('2026-09-24T00:00:00Z')) {
+function calculateCohortMetrics(cohort = COHORT_A, evalDate = new Date('2026-09-24T00:00:00Z')) {
   const elapsedMs = evalDate.getTime() - cohort.startDate.getTime();
   const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
 

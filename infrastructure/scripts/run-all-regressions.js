@@ -1,21 +1,39 @@
 /**
  * NeXaVerSe Master Regression Test Runner
- * Executes all automated test suites sequentially.
+ * Executes all 10 automated test suites sequentially against the mock server environment.
  */
 
 const { spawn } = require('child_process');
 const path = require('path');
+const http = require('http');
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function probeHealth() {
+  return new Promise((resolve) => {
+    const req = http.get('http://127.0.0.1:8080/health', (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
 
 const testSuites = [
-  'smoke-test.js',
-  'e2e-scenario-test.js',
-  'concurrency-stress-test.js',
-  'phase8-regression-test.js',
-  'phase9-regression-test.js',
+  'admin-test.js',
+  'rewards-test.js',
+  'e2e-test.js',
+  'phase6-alpha-validation.js',
+  'phase7-alpha-ops.js',
+  'phase8-global-mvp-validation.js',
+  'phase9-release-candidate-validation.js',
   'phase10-final-hardening-validation.js',
-  'international-expansion-test.js',
-  'chaos-fault-injection.js',
-  'phase11-evidence-reconciliation.js',
+  'phase11-global-beta-validation.js',
   'phase12-master-validation.js'
 ];
 
@@ -30,7 +48,8 @@ function runSuite(suiteName) {
     
     const child = spawn('node', [path.join(__dirname, suiteName)], {
       stdio: 'inherit',
-      cwd: __dirname
+      cwd: __dirname,
+      env: process.env
     });
 
     child.on('close', (code) => {
@@ -53,10 +72,33 @@ function runSuite(suiteName) {
   });
 }
 
-async function runAll() {
+async function main() {
   console.log('======================================================');
   console.log(`STARTING NEXAVERSE REGRESSION SUITE (${testSuites.length} Suites)`);
   console.log('======================================================');
+
+  console.log('Starting Mock Server for Regression Suite...');
+  const mockServer = spawn('node', [path.join(__dirname, 'mock-server.js')], {
+    stdio: 'inherit',
+    cwd: __dirname,
+    env: { ...process.env, RATE_LIMIT_GENERAL_RPM: '5000', RATE_LIMIT_AUTH_RPM: '5000' }
+  });
+
+  // Wait for health
+  let ready = false;
+  for (let i = 0; i < 20; i++) {
+    await sleep(500);
+    if (await probeHealth()) {
+      ready = true;
+      break;
+    }
+  }
+
+  if (!ready) {
+    console.error('Failed to start mock-server within 10s');
+    mockServer.kill();
+    process.exit(1);
+  }
 
   const startTime = Date.now();
 
@@ -66,6 +108,9 @@ async function runAll() {
       console.error(`\nSuite ${suite} failed. Continuing with remaining suites for full diagnosis...`);
     }
   }
+
+  console.log('\nStopping Mock Server...');
+  mockServer.kill();
 
   const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -84,4 +129,4 @@ async function runAll() {
   }
 }
 
-runAll();
+main();

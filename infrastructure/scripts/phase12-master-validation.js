@@ -100,11 +100,12 @@ async function main() {
 
   // --- WORKSTREAM 4: Longitudinal Retention Horizon ---
   console.log('\n--- WORKSTREAM 4: Longitudinal Retention Horizon ---');
-  const metrics = calculateCohortMetrics();
-  assert(metrics.d1RetentionRate === '65.0%', 'D1 Retention mathematically calculated: 65.0% [REAL USER]');
-  assert(metrics.d7RetentionRate === 'CALENDAR_UNELAPSED [NOT VERIFIED]', 'D7 Retention strictly marked CALENDAR_UNELAPSED [NOT VERIFIED]');
-  assert(metrics.d14RetentionRate === 'CALENDAR_UNELAPSED [NOT VERIFIED]', 'D14 Retention strictly marked CALENDAR_UNELAPSED [NOT VERIFIED]');
-  assert(metrics.d30RetentionRate === 'CALENDAR_UNELAPSED [NOT VERIFIED]', 'D30 Retention strictly marked CALENDAR_UNELAPSED [NOT VERIFIED]');
+  const metrics = calculateCohortMetrics(COHORT_A);
+  const jsonMetrics = JSON.parse(fs.readFileSync(path.join(__dirname, 'latest-retention-metrics.json'), 'utf8'));
+  assert(metrics.retention.D1.retentionPct === 65 && jsonMetrics.d1RetentionRate === '65.0%', 'D1 Retention mathematically calculated: 65.0% [REAL USER]');
+  assert(metrics.retention.D7.status === 'CALENDAR_UNELAPSED' && jsonMetrics.d7RetentionRate.includes('CALENDAR_UNELAPSED'), 'D7 Retention strictly marked CALENDAR_UNELAPSED [NOT VERIFIED]');
+  assert(metrics.retention.D14.status === 'CALENDAR_UNELAPSED' && jsonMetrics.d14RetentionRate.includes('CALENDAR_UNELAPSED'), 'D14 Retention strictly marked CALENDAR_UNELAPSED [NOT VERIFIED]');
+  assert(metrics.retention.D30.status === 'CALENDAR_UNELAPSED' && jsonMetrics.d30RetentionRate.includes('CALENDAR_UNELAPSED'), 'D30 Retention strictly marked CALENDAR_UNELAPSED [NOT VERIFIED]');
 
   // --- WORKSTREAM 5: External Smart Contract Audit Verification ---
   console.log('\n--- WORKSTREAM 5: External Smart Contract Audit Verification ---');
@@ -127,7 +128,7 @@ async function main() {
   // 1. Negative amount rejection
   try {
     const negRes = await request('POST', '/api/v1/wallet/transfer', {
-      recipient: 'user_receiver_456',
+      receiver_id: 'user_receiver_456',
       amount: -100
     }, authHeader);
     assert(negRes.statusCode === 400, `Negative amount rejected with HTTP 400 (Got: ${negRes.statusCode}) [AUTOMATED TEST]`);
@@ -138,7 +139,7 @@ async function main() {
   // 2. Self transfer rejection
   try {
     const selfRes = await request('POST', '/api/v1/wallet/transfer', {
-      recipient: 'user_sender_123',
+      receiver_id: 'user_sender_123',
       amount: 50
     }, authHeader);
     assert(selfRes.statusCode === 400, `Self-transfer rejected with HTTP 400 (Got: ${selfRes.statusCode}) [AUTOMATED TEST]`);
@@ -150,13 +151,13 @@ async function main() {
   try {
     const idemKey = `idem-phase12-${Date.now()}`;
     const tx1 = await request('POST', '/api/v1/wallet/transfer', {
-      recipient: 'user_receiver_456',
+      receiver_id: 'user_receiver_456',
       amount: 25
     }, { ...authHeader, 'X-Idempotency-Key': idemKey });
     assert(tx1.statusCode === 200, `Initial valid transfer accepted (HTTP 200) [AUTOMATED TEST]`);
 
     const tx2 = await request('POST', '/api/v1/wallet/transfer', {
-      recipient: 'user_receiver_456',
+      receiver_id: 'user_receiver_456',
       amount: 25
     }, { ...authHeader, 'X-Idempotency-Key': idemKey });
     assert(tx2.statusCode === 409 || tx2.statusCode === 200, `Idempotent duplicate handled cleanly (HTTP ${tx2.statusCode}) [AUTOMATED TEST]`);
